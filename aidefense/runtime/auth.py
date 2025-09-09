@@ -17,16 +17,20 @@
 from requests.auth import AuthBase
 
 auth_header = "X-Cisco-AI-Defense-API-Key"
+# TODO remove this and unify with above header
+auth_tenant_header = "X-Cisco-AI-Defense-Tenant-API-Key"
 
 
 class RuntimeAuth(AuthBase):
     """Custom authentication class for runtime authentication."""
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, is_tenant_api_key: bool = False):
         self.token = token
+        self.is_tenant_api_key = is_tenant_api_key
         self.validate()
 
     def __call__(self, request):
+        request.headers[auth_header if not self.is_tenant_api_key else auth_tenant_header] = f"{self.token}"
         request.headers[auth_header] = f"{self.token}"
         return request
 
