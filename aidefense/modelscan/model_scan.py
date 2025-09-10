@@ -13,14 +13,28 @@
 # limitations under the License.
 #
 # SPDX-License-Identifier: Apache-2.0
-
+from enum import Enum
 from pathlib import Path
-from typing import Optional, Tuple
+from time import sleep
+from typing import Optional, Tuple, Dict, Union
 
 from aidefense.config import Config
-
 from aidefense.runtime.auth import RuntimeAuth
 from aidefense.client import BaseClient
+
+RETRY_COUNT_FOR_SCANNING = 30
+WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK = 2
+
+class ScanStatus(str, Enum):
+    """Enum for scan status"""
+    NONE_SCAN_STATUS = "NONE_SCAN_STATUS"
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELED = "CANCELED"
+
+END_SCAN_STATUS = [ScanStatus.COMPLETED, ScanStatus.FAILED, ScanStatus.CANCELED]
 
 class ModelScan(BaseClient):
     def __init__(self, api_key: str, config: Optional[Config] = None):
@@ -104,7 +118,7 @@ class ModelScan(BaseClient):
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
-    def list_scans(self, limit: int = 10, offset: int = 0) -> dict:
+    def list_scans(self, limit: int = 10, offset: int = 0) -> Dict:
         """List scans with pagination support"""
         headers = {"Content-Type": "application/json"}
         params = {
@@ -121,7 +135,7 @@ class ModelScan(BaseClient):
         self.config.logger.debug(f"Raw API response: {result}")
         return result
 
-    def get_scan(self, scan_id: str, limit: int = 10, offset: int = 0) -> dict:
+    def get_scan(self, scan_id: str, limit: int = 10, offset: int = 0) -> Dict:
         """Get scan with pagination support for scan results"""
         headers = {"Content-Type": "application/json"}
         params = {
@@ -157,3 +171,30 @@ class ModelScan(BaseClient):
             headers=headers,
         )
         self.config.logger.debug(f"Raw API response: {result}")
+
+    def __get_scan_info_wait_until_status(self, scan_id: str, status: [str]) -> Dict:  # type: ignore
+        for _ in range(RETRY_COUNT_FOR_SCANNING):
+            info = self.get_scan(scan_id)
+            if info and info.get("scan_status_info", {}).get("status") in status:
+                return info
+
+            sleep(WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK)
+
+        raise Exception("Scan timed out")
+
+    def scan(self, file_path: Union[Path, str]) -> Dict:
+        """Run a security scan on a file using AI Defense server"""
+        scan_id = self.register_scan()
+        file_path = Path(file_path)
+        try:
+            self.upload_file(scan_id, file_path)
+            self.trigger_scan(scan_id)
+            scan_info = self.__get_scan_info_wait_until_status(scan_id, END_SCAN_STATUS)
+        except Exception as e:
+            if scan_id:
+                self.cancel_scan(scan_id)
+                self.__get_scan_info_wait_until_status(scan_id, ScanStatus.CANCELED)
+                self.delete_scan(scan_id)
+            raise e
+
+        return scan_info

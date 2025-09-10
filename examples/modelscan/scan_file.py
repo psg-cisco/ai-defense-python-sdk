@@ -15,20 +15,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-AI Defense Python SDK
-Convenient imports for all major SDK components.
+Example: Using inspect_conversation for chat conversation inspection
 """
+from pathlib import Path
 
-from .runtime import *
-from .config import Config
-from .exceptions import ValidationError, ApiError, SDKError
-from .modelscan import ModelScan
+from aidefense import ModelScan
 
-# Import management API components
-from .management import (
-    ManagementClient,
-    ApplicationManagementClient,
-    ConnectionManagementClient,
-    PolicyManagementClient,
-    EventManagementClient,
-)
+client = ModelScan(api_key="YOUR_API_KEY")
+
+result = client.scan(file_path="PATH_TO_YOUR_FILE")
+print("Scan result:", result)
