@@ -29,9 +29,31 @@ from .exceptions import SDKError, ValidationError, ApiError
 REQUEST_ID_HEADER = "x-aidefense-request-id"
 
 
-class BaseClient(ABC):
+class BaseRequestHandler(ABC):
     """
-    Base client for all API interactions.
+    Abstract parent for all request handlers (sync, async, http2, etc).
+    Defines the interface and shared logic for request handlers.
+    """
+
+    USER_AGENT = f"Cisco-AI-Defense-Python-SDK/{version}"
+    VALID_HTTP_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+
+    def __init__(self, config: Config):
+        self.config = config
+
+    def get_request_id(self) -> str:
+        request_id = str(uuid.uuid4())
+        self.config.logger.debug(f"get_request_id called | returning: {request_id}")
+        return request_id
+
+    @abstractmethod
+    def request(self, *args, **kwargs):
+        pass
+
+
+class RequestHandler(BaseRequestHandler):
+    """
+    Request handler for all API interactions.
 
     Provides methods for making HTTP requests, handling errors, and managing
     session configurations.
@@ -42,34 +64,13 @@ class BaseClient(ABC):
         _session (requests.Session): The HTTP session used for making requests.
     """
 
-    USER_AGENT = f"Cisco-AI-Defense-Python-SDK/{version}"
-    VALID_HTTP_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
-
     def __init__(self, config: Config):
-        """
-        Initialize the BaseClient.
-
-        Args:
-            config (Config): The configuration object containing settings like
-                             connection pool, timeout, and logger.
-        """
-        self.config = config
+        super().__init__(config)
         self._session = requests.Session()
-        # Apply connection pool config
         self._session.mount("https://", config.connection_pool)
         self._session.headers.update(
             {"User-Agent": self.USER_AGENT, "Content-Type": "application/json"}
         )
-
-    def get_request_id(self) -> str:
-        """Generate a unique request ID.
-
-        Returns:
-            str: A unique identifier for the request.
-        """
-        request_id = str(uuid.uuid4())
-        self.config.logger.debug(f"get_request_id called | returning: {request_id}")
-        return request_id
 
     def request(
         self,
@@ -81,15 +82,17 @@ class BaseClient(ABC):
         json_data: Dict = None,
         timeout: int = None,
     ) -> Dict:
-        """Make an HTTP request with error handling.
+        """
+        Make an HTTP request to the specified URL.
 
         Args:
-            method (str): The HTTP method (e.g., 'GET', 'POST').
-            url (str): The URL for the request.
-            auth (AuthBase): The authentication object for the request.
-            headers (Dict, optional): Additional headers for the request.
-            json_data (Dict, optional): JSON payload for the request.
-            timeout (int, optional): Timeout for the request in seconds.
+            method (str): HTTP method, e.g. GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS.
+            url (str): URL of the request.
+            auth (AuthBase): Authentication handler.
+            request_id (str, optional): Unique identifier for the request (usually a UUID) to enable request tracing.
+            headers (dict, optional): HTTP request headers.
+            json_data (dict, optional): Request body as a JSON-serializable dictionary.
+            timeout (int, optional): Request timeout in seconds.
 
         Returns:
             Dict: The JSON response from the API.
@@ -109,22 +112,26 @@ class BaseClient(ABC):
             if not url or not url.startswith(("http://", "https://")):
                 raise ValidationError(f"Invalid URL: {url}")
 
-            headers = headers or {}
+            request_headers = dict(self._session.headers)
+            
+            # Update with any custom headers
+            if headers:
+                request_headers.update(headers)
+                
             request_id = request_id or self.get_request_id()
-            headers[REQUEST_ID_HEADER] = request_id
+            request_headers[REQUEST_ID_HEADER] = request_id
 
-            # Use the provided auth object to set headers
             if auth:
                 request = requests.Request(
-                    method=method, url=url, headers=headers, json=json_data
+                    method=method, url=url, headers=request_headers, json=json_data
                 )
                 prepared_request = auth(request.prepare())
-                headers.update(prepared_request.headers)
+                request_headers.update(prepared_request.headers)
 
             response = self._session.request(
                 method=method,
                 url=url,
-                headers=headers,
+                headers=request_headers,
                 json=json_data,
                 timeout=timeout or self.config.timeout,
             )
@@ -162,9 +169,7 @@ class BaseClient(ABC):
             error_data = response.json()
         except ValueError:
             error_data = {"message": response.text or "Unknown error"}
-
         error_message = error_data.get("message", "Unknown error")
-
         if response.status_code == 401:
             raise SDKError(
                 f"Authentication error: {error_message}", response.status_code

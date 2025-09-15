@@ -76,6 +76,7 @@ class ChatInspectionClient(InspectionClient):
             metadata (Metadata, optional): Optional metadata about the user/application context.
             config (InspectionConfig, optional): Optional inspection configuration (rules, etc.).
             request_id (str, optional): Unique identifier for the request (usually a UUID) to enable request tracing.
+            timeout(int, optional): Request timeout in seconds.
 
         Returns:
             InspectResponse: Inspection results as an InspectResponse object.
@@ -283,7 +284,7 @@ class ChatInspectionClient(InspectionClient):
         request_dict = self._prepare_request_data(request)
         self.validate_inspection_request(request_dict)
         headers = {"Content-Type": "application/json"}
-        result = self.request(
+        result = self._request_handler.request(
             method="POST",
             url=self.endpoint,
             auth=self.auth,

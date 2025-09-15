@@ -30,7 +30,7 @@ from .http_models import (
     HttpHdrKvObject,
 )
 from .utils import convert, to_base64_bytes, ensure_base64_body
-from .models import Metadata, InspectionConfig, InspectResponse, Rule, RuleName
+from .models import Metadata, InspectionConfig, InspectResponse
 from ..config import Config
 from ..exceptions import ValidationError
 
@@ -600,7 +600,7 @@ class HttpInspectionClient(InspectionClient):
         headers = {
             "Content-Type": "application/json",
         }
-        result = self.request(
+        result = self._request_handler.request(
             method="POST",
             url=self.endpoint,
             auth=self.auth,
@@ -666,9 +666,12 @@ class HttpInspectionClient(InspectionClient):
                 raise ValidationError(f"'{HTTP_REQ}' must have a non-empty 'body'.")
             if not http_req.get(HTTP_METHOD):
                 raise ValidationError(f"'{HTTP_REQ}' must have a '{HTTP_METHOD}'.")
-            if http_req.get(HTTP_METHOD) not in self.VALID_HTTP_METHODS:
+            if (
+                http_req.get(HTTP_METHOD)
+                not in self._request_handler.VALID_HTTP_METHODS
+            ):
                 raise ValidationError(
-                    f"'{HTTP_REQ}' must have a valid '{HTTP_METHOD}' (one of {self.VALID_HTTP_METHODS})."
+                    f"'{HTTP_REQ}' must have a valid '{HTTP_METHOD}' (one of {self._request_handler.VALID_HTTP_METHODS})."
                 )
         if http_res:
             if not isinstance(http_res, dict):
