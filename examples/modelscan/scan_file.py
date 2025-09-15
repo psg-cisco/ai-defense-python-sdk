@@ -17,11 +17,13 @@
 """
 Example: Using inspect_conversation for chat conversation inspection
 """
-from pathlib import Path
 
-from aidefense import ModelScan
+from aidefense import ModelScanClient, Config
 
-client = ModelScan(api_key="YOUR_API_KEY")
+client = ModelScanClient(
+    api_key="YOUR_API_KEY",
+    config=Config(runtime_base_url="YOUR_AI_DEFENSE_REST_API_BASE_URL"),
+)
 
-result = client.scan(file_path="PATH_TO_YOUR_FILE")
+result = client.scan_file(file_path="PATH_TO_YOUR_FILE")
 print("Scan result:", result)

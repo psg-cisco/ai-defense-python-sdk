@@ -22,7 +22,7 @@ Convenient imports for all major SDK components.
 from .runtime import *
 from .config import Config
 from .exceptions import ValidationError, ApiError, SDKError
-from .modelscan import ModelScan
+from .modelscan import ModelScanClient
 
 # Import management API components
 from .management import (

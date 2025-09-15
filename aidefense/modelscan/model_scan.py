@@ -18,8 +18,8 @@ from pathlib import Path
 from time import sleep
 from typing import Dict, Union
 
-from aidefense import ModelScan
-from aidefense.modelscan import ScanStatus, RepoConfig
+from .model_scan_base import ModelScan
+from .config import ScanStatus, RepoConfig
 
 RETRY_COUNT_FOR_SCANNING = 30
 WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK = 2
@@ -91,6 +91,12 @@ class ModelScanClient(ModelScan):
 
         raise Exception("Scan timed out")
 
+    def cleanup_scan_data(self, scan_id: str) -> None:
+        self.cancel_scan(scan_id)
+        self.__get_scan_info_wait_until_status(scan_id, ScanStatus.CANCELED)
+        self.delete_scan(scan_id)
+
+
     def scan_file(self, file_path: Union[Path, str]) -> Dict:
         """
         Run a complete security scan on a model file using the AI Defense service.
@@ -155,9 +161,7 @@ class ModelScanClient(ModelScan):
             scan_info = self.__get_scan_info_wait_until_status(scan_id, END_SCAN_STATUS)
         except Exception as e:
             if scan_id:
-                self.cancel_scan(scan_id)
-                self.__get_scan_info_wait_until_status(scan_id, ScanStatus.CANCELED)
-                self.delete_scan(scan_id)
+                self.cleanup_scan_data(scan_id)
             raise e
 
         return scan_info
@@ -245,9 +249,7 @@ class ModelScanClient(ModelScan):
             scan_info = self.__get_scan_info_wait_until_status(scan_id, END_SCAN_STATUS)
         except Exception as e:
             if scan_id:
-                self.cancel_scan(scan_id)
-                self.__get_scan_info_wait_until_status(scan_id, ScanStatus.CANCELED)
-                self.delete_scan(scan_id)
+                self.cleanup_scan_data(scan_id)
             raise e
 
         return scan_info
