@@ -70,7 +70,7 @@ class ModelScan(BaseClient):
         return {"Content-Type": "application/json"}
 
     def create_scan_object(
-            self, scan_id: str, file_name: str, size: int = 0) -> Tuple[str, str]:
+            self, scan_id: str, file_name: str, size: int = 0, object_config: Dict = {}) -> Tuple[str, str]:
         """
         Create a scan object for a file within an existing scan.
 
@@ -81,6 +81,7 @@ class ModelScan(BaseClient):
             scan_id (str): The unique identifier of the scan session.
             file_name (str): The name of the file to be scanned.
             size (int, optional): The size of the file in bytes. Defaults to 0.
+            object_config (Dict, optional): Additional configuration for the scan object.
 
         Returns:
             Tuple[str, str]: A tuple containing (object_id, upload_url) where:
@@ -103,7 +104,7 @@ class ModelScan(BaseClient):
             url=f"{self.endpoint_prefix}/scans/{scan_id}/objects",
             auth=self.auth,
             headers=self._default_headers,
-            json_data={"file_name": file_name, "size":size},
+            json_data={"file_name": file_name, "size":size, "scan_object": object_config},
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
