@@ -70,7 +70,7 @@ class ModelScan(BaseClient):
         return {"Content-Type": "application/json"}
 
     def create_scan_object(
-            self, scan_id: str, file_name: str, size: int = 0, object_config: Dict = {}) -> Tuple[str, str]:
+            self, scan_id: str, file_name: str, size: int = 0, object_config: Optional[Dict] = None) -> Tuple[str, str]:
         """
         Create a scan object for a file within an existing scan.
 
