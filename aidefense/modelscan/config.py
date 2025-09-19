@@ -24,7 +24,7 @@ repository types and their authentication mechanisms.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum, StrEnum
+from enum import Enum
 from typing import Optional, Dict
 
 class ScanStatus(str, Enum):
@@ -50,7 +50,7 @@ class ScanStatus(str, Enum):
     CANCELED = "CANCELED"
 
 
-class UrlType(StrEnum):
+class UrlType(str, Enum):
     """
     Enumeration of supported repository URL types.
 
