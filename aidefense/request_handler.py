@@ -79,6 +79,7 @@ class RequestHandler(BaseRequestHandler):
         auth: AuthBase,
         request_id: str = None,
         headers: Dict = None,
+        params: Dict = None,
         json_data: Dict = None,
         timeout: int = None,
     ) -> Dict:
@@ -91,6 +92,7 @@ class RequestHandler(BaseRequestHandler):
             auth (AuthBase): Authentication handler.
             request_id (str, optional): Unique identifier for the request (usually a UUID) to enable request tracing.
             headers (dict, optional): HTTP request headers.
+            params (dict, optional): Query parameters.
             json_data (dict, optional): Request body as a JSON-serializable dictionary.
             timeout (int, optional): Request timeout in seconds.
 
@@ -113,17 +115,21 @@ class RequestHandler(BaseRequestHandler):
                 raise ValidationError(f"Invalid URL: {url}")
 
             request_headers = dict(self._session.headers)
-            
+
             # Update with any custom headers
             if headers:
                 request_headers.update(headers)
-                
+
             request_id = request_id or self.get_request_id()
             request_headers[REQUEST_ID_HEADER] = request_id
 
             if auth:
                 request = requests.Request(
-                    method=method, url=url, headers=request_headers, json=json_data
+                    method=method,
+                    url=url,
+                    headers=request_headers,
+                    params=params,
+                    json=json_data,
                 )
                 prepared_request = auth(request.prepare())
                 request_headers.update(prepared_request.headers)
@@ -132,6 +138,7 @@ class RequestHandler(BaseRequestHandler):
                 method=method,
                 url=url,
                 headers=request_headers,
+                params=params,
                 json=json_data,
                 timeout=timeout or self.config.timeout,
             )

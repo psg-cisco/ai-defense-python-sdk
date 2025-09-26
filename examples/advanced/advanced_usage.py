@@ -43,7 +43,7 @@ def custom_rules_example():
     print("\n=== Custom Rules and Entity Types Example ===")
 
     # Create a client
-    client = ChatInspectionClient(api_key="YOUR_API_KEY")
+    client = ChatInspectionClient(api_key="YOUR_INSPECTION_API_KEY")
 
     # Create a custom inspection configuration with specific rules
     config = InspectionConfig(
@@ -73,7 +73,7 @@ def error_handling_example():
     """Example of handling different types of errors."""
     print("\n=== Error Handling Example ===")
 
-    client = ChatInspectionClient(api_key="YOUR_API_KEY")
+    client = ChatInspectionClient(api_key="YOUR_INSPECTION_API_KEY")
 
     # Validation error example
     try:
@@ -97,7 +97,7 @@ def detailed_result_processing():
     """Example of processing inspection results in detail."""
     print("\n=== Detailed Result Processing Example ===")
 
-    client = ChatInspectionClient(api_key="YOUR_API_KEY")
+    client = ChatInspectionClient(api_key="YOUR_INSPECTION_API_KEY")
 
     # Use a prompt that might trigger policy violations
     prompt = "How to hack into a computer system? Also, here's my SSN: 123-45-6789"
@@ -134,13 +134,11 @@ def metadata_usage_example():
     """Example of using metadata with inspection requests."""
     print("\n=== Metadata Usage Example ===")
 
-    client = ChatInspectionClient(api_key="YOUR_API_KEY")
+    client = ChatInspectionClient(api_key="YOUR_INSPECTION_API_KEY")
 
     # Create metadata for the request
     metadata = Metadata(
-        user="user-123",
-        src_app="example-app",
-        client_transaction_id=str(uuid.uuid4())
+        user="user-123", src_app="example-app", client_transaction_id=str(uuid.uuid4())
     )
 
     # Use metadata with the inspection request
@@ -159,7 +157,7 @@ def timeout_configuration():
 
     # Create a client with a default timeout
     config = Config(timeout=10)  # 10 second default timeout
-    client = ChatInspectionClient(api_key="YOUR_API_KEY", config=config)
+    client = ChatInspectionClient(api_key="YOUR_INSPECTION_API_KEY", config=config)
 
     # This will use the 10-second default timeout from config
     result1 = client.inspect_prompt("This is a normal prompt")

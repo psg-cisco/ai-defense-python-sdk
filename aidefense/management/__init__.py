@@ -15,19 +15,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Example: Using inspect_conversation for chat conversation inspection
+AI Defense Management API
+Provides access to the AI Defense Management API for managing applications, connections, policies, and events.
 """
 
-from aidefense import ChatInspectionClient
-from aidefense.runtime import Message, Role
+from .management_client import ManagementClient
+from .applications import ApplicationManagementClient
+from .connections import ConnectionManagementClient
+from .policies import PolicyManagementClient
+from .events import EventManagementClient
 
-client = ChatInspectionClient(api_key="YOUR_INSPECTION_API_KEY")
-
-conversation = [
-    Message(role=Role.USER, content="Hi, can you help me with my account?"),
-    Message(role=Role.ASSISTANT, content="Sure, what do you need help with?"),
+__all__ = [
+    "ManagementClient",
+    "ApplicationManagementClient",
+    "ConnectionManagementClient",
+    "PolicyManagementClient",
+    "EventManagementClient",
 ]
-
-result = client.inspect_conversation(conversation)
-print("Is safe?", result.is_safe)
-print("Details:", result)
