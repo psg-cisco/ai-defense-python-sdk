@@ -15,11 +15,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Base client implementation for interacting with APIs."""
+from enum import Enum
 
 import requests
 import uuid
-from abc import ABC
-from typing import Dict, Optional, BinaryIO, Union
+from abc import ABC, abstractmethod
+from typing import Dict, Any, Optional
 from requests.auth import AuthBase
 
 from .version import version
@@ -28,6 +29,14 @@ from .exceptions import SDKError, ValidationError, ApiError
 
 REQUEST_ID_HEADER = "x-aidefense-request-id"
 
+class HttpMethod(str, Enum):
+    GET = "GET"
+    PUT = "PUT"
+    POST = "POST"
+    DELETE = "DELETE"
+    PATCH = "PATCH"
+    HEAD = "HEAD"
+    OPTIONS = "OPTIONS"
 
 class BaseRequestHandler(ABC):
     """
@@ -76,15 +85,13 @@ class RequestHandler(BaseRequestHandler):
         self,
         method: str,
         url: str,
-        auth: Optional[AuthBase] = None,
-        request_id: Optional[str] = None,
-        headers: Optional[Dict] = None,
+        auth: AuthBase,
+        request_id: str = None,
+        headers: Dict = None,
         params: Dict = None,
-        json_data: Optional[Dict] = None,
-        timeout: Optional[int] = None,
-        params: Optional[Dict] = None,
-        data: Optional[BinaryIO] = None,
-    ) -> Union[Dict, requests.Response]:
+        json_data: Dict = None,
+        timeout: int = None,
+    ) -> Dict:
         """
         Make an HTTP request to the specified URL.
 
@@ -93,13 +100,10 @@ class RequestHandler(BaseRequestHandler):
             url (str): URL of the request.
             auth (AuthBase): Authentication handler.
             request_id (str, optional): Unique identifier for the request (usually a UUID) to enable request tracing.
-            request_id (str, optional): Unique request id for the current API request.
             headers (dict, optional): HTTP request headers.
             params (dict, optional): Query parameters.
             json_data (dict, optional): Request body as a JSON-serializable dictionary.
             timeout (int, optional): Request timeout in seconds.
-            params (Dict, optional): parameters for the API
-            data (BinaryIO, optional): file stream or binary data that needs to be sent as part of request.
 
         Returns:
             Dict: The JSON response from the API.
@@ -145,26 +149,21 @@ class RequestHandler(BaseRequestHandler):
                 headers=request_headers,
                 params=params,
                 json=json_data,
-                data=data,
                 timeout=timeout or self.config.timeout,
-                params=params,
             )
 
             if response.status_code >= 400:
-                self._handle_error_response(response, request_id)
+                return self._handle_error_response(response, request_id)
 
-            try:
-                return response.json()
-            except ValueError:
-                return response
+            return response.json()
 
         except requests.RequestException as e:
             self.config.logger.error(f"Request failed: {e}")
             raise
 
     def _handle_error_response(
-        self, response: requests.Response, request_id: Optional[str] = None
-    ) -> None:
+        self, response: requests.Response, request_id: str = None
+    ) -> Dict:
         """Handle error responses from the API.
 
         Args:

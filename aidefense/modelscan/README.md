@@ -26,7 +26,7 @@ from aidefense import Config
 # Initialize the client
 client = ModelScanClient(
     api_key="your_api_key",
-    config=Config(runtime_base_url="https://api.security.cisco.com")
+    config=Config(management_base_url="https://api.security.cisco.com")
 )
 
 # Scan a local file
@@ -74,7 +74,7 @@ from aidefense import Config
 # Initialize the client
 client = ModelScanClient(
     api_key="your_api_key",
-    config=Config(runtime_base_url="https://api.security.cisco.com")
+    config=Config(management_base_url="https://api.security.cisco.com")
 )
 
 # Configure repository scan with authentication
@@ -123,7 +123,7 @@ from aidefense import Config
 
 client = ModelScanClient(
     api_key="your_api_key",
-    config=Config(runtime_base_url="https://api.security.cisco.com")
+    config=Config(management_base_url="https://api.security.cisco.com")
 )
 
 # Scan a public repository without authentication
@@ -150,7 +150,7 @@ from aidefense import Config
 # Initialize the base client
 client = ModelScan(
     api_key="your_api_key",
-    config=Config(runtime_base_url="https://api.security.cisco.com")
+    config=Config(management_base_url="https://api.security.cisco.com")
 )
 
 # Step 1: Register a new scan
@@ -255,7 +255,7 @@ from aidefense.modelscan import ModelScanClient
 
 client = ModelScanClient(
     api_key="your_api_key",
-    config=Config(runtime_base_url="https://api.security.cisco.com")
+    config=Config(management_base_url="https://api.security.cisco.com")
 )
 
 # Get first 10 scans
@@ -299,7 +299,7 @@ from aidefense.modelscan import ModelScanClient
 
 client = ModelScanClient(
     api_key="your_api_key",
-    config=Config(runtime_base_url="https://api.security.cisco.com")
+    config=Config(management_base_url="https://api.security.cisco.com")
 )
 
 # Get detailed information about a specific scan
@@ -368,7 +368,7 @@ from aidefense.modelscan import ModelScanClient
 
 client = ModelScanClient(
     api_key="your_api_key",
-    config=Config(runtime_base_url="https://api.security.cisco.com")
+    config=Config(management_base_url="https://api.security.cisco.com")
 )
 
 scan_id = "your_scan_id_here"

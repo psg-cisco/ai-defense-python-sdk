@@ -23,7 +23,7 @@ from aidefense.modelscan import ModelScanClient
 # Initialize the client
 client = ModelScanClient(
     api_key="<YOUR_API_KEY>",
-    config=Config(runtime_base_url="<YOUR_BASE_URL>")
+    config=Config(management_base_url="<YOUR_BASE_URL>")
 )
 
 # Get first 10 scans

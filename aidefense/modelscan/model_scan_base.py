@@ -17,8 +17,12 @@
 from pathlib import Path
 from typing import Optional, Tuple, Dict
 
-from aidefense.client import BaseClient
+from requests import request
+
 from aidefense.config import Config
+from aidefense.management.auth import ManagementAuth
+from aidefense.management.base_client import BaseClient
+from aidefense.request_handler import HttpMethod
 from aidefense.runtime.auth import RuntimeAuth
 
 
@@ -48,7 +52,8 @@ class ModelScan(BaseClient):
         endpoint_prefix (str): Base URL prefix for all model scan API endpoints.
     """
 
-    def __init__(self, api_key: str, config: Optional[Config] = None):
+    def __init__(
+        self, api_key: str, config: Optional[Config] = None, request_handler=None):
         """
         Initialize a ModelScan client instance.
 
@@ -57,20 +62,14 @@ class ModelScan(BaseClient):
             config (Config, optional): SDK-level configuration for endpoints, logging, retries, etc.
                 If not provided, a default Config instance is created.
         """
-        config = config or Config()
-        super().__init__(config)
-        self.auth = RuntimeAuth(api_key, is_tenant_api_key=True)
-        self.config = config
-        self.api_key = api_key
-        self.endpoint_prefix = f"{self.config.runtime_base_url}/api/ai-defense/v1"
-
-    @property
-    def _default_headers(self) -> Dict[str, str]:
-        """Default headers for API requests."""
-        return {"Content-Type": "application/json"}
+        super().__init__(ManagementAuth(api_key), config, request_handler)
 
     def create_scan_object(
-            self, scan_id: str, file_name: str, size: int = 0, object_config: Optional[Dict] = None) -> Tuple[str, str]:
+        self,
+        scan_id: str,
+        file_name: str,
+        size: int = 0,
+        object_config: Optional[Dict] = None) -> Tuple[str, str]:
         """
         Create a scan object for a file within an existing scan.
 
@@ -99,12 +98,10 @@ class ModelScan(BaseClient):
             )
             ```
         """
-        result = self.request(
-            method="POST",
-            url=f"{self.endpoint_prefix}/scans/{scan_id}/objects",
-            auth=self.auth,
-            headers=self._default_headers,
-            json_data={"file_name": file_name, "size":size, "scan_object": object_config},
+        result = self.make_request(
+            method=HttpMethod.POST,
+            path=f"/scans/{scan_id}/objects",
+            data={"file_name": file_name, "size":size, "scan_object": object_config},
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
@@ -135,12 +132,10 @@ class ModelScan(BaseClient):
             )
             ```
         """
-        result = self.request(
-            method="POST",
-            url=f"{self.endpoint_prefix}/scans/{scan_id}/objects/{scan_object_id}/results",
-            auth=self.auth,
-            headers=self._default_headers,
-            json_data={"scan_result": scan_result},
+        result = self.make_request(
+            method=HttpMethod.POST,
+            path=f"scans/{scan_id}/objects/{scan_object_id}/results",
+            data={"scan_result": scan_result},
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
@@ -169,12 +164,10 @@ class ModelScan(BaseClient):
             )
             ```
         """
-        result = self.request(
-            method="PUT",
-            url=f"{self.endpoint_prefix}/scans/{scan_id}/complete",
-            auth=self.auth,
-            headers=self._default_headers,
-            json_data={"errors": errors},
+        result = self.make_request(
+            method=HttpMethod.PUT,
+            path=f"scans/{scan_id}/complete",
+            data={"errors": errors},
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
@@ -195,11 +188,9 @@ class ModelScan(BaseClient):
             print(f"Created new scan with ID: {scan_id}")
             ```
         """
-        result = self.request(
-            method="POST",
-            url=f"{self.endpoint_prefix}/scans/register",
-            auth=self.auth,
-            headers=self._default_headers,
+        result = self.make_request(
+            method=HttpMethod.POST,
+            path="scans/register",
         )
         self.config.logger.debug(f"Raw API response: {result}")
         return result["scan_id"]
@@ -236,13 +227,7 @@ class ModelScan(BaseClient):
         _, upload_url = self.create_scan_object(scan_id, file_path.name, file_size)
 
         with open(file_path, 'rb') as f:
-            result = self.request(
-                method="PUT",
-                url=upload_url,
-                auth=None,
-                headers=self._default_headers,
-                data=f
-            )
+            result = request(method="PUT", url=upload_url, data=f)
         self.config.logger.debug(f"Raw API response: {result}")
         return True
 
@@ -265,11 +250,9 @@ class ModelScan(BaseClient):
             print("Scan started")
             ```
         """
-        result = self.request(
-            method="PUT",
-            url=f"{self.endpoint_prefix}/scans/{scan_id}/run",
-            auth=self.auth,
-            headers=self._default_headers,
+        result = self.make_request(
+            method=HttpMethod.PUT,
+            path=f"scans/{scan_id}/run",
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
@@ -305,11 +288,9 @@ class ModelScan(BaseClient):
             "limit": limit,
             "offset": offset
         }
-        result = self.request(
+        result = self.make_request(
             method="GET",
-            url=f"{self.endpoint_prefix}/scans",
-            auth=self.auth,
-            headers=self._default_headers,
+            path="scans",
             params=params,
         )
         self.config.logger.debug(f"Raw API response: {result}")
@@ -350,11 +331,9 @@ class ModelScan(BaseClient):
             "limit": limit,
             "offset": offset
         }
-        result = self.request(
-            method="GET",
-            url=f"{self.endpoint_prefix}/scans/{scan_id}",
-            auth=self.auth,
-            headers=self._default_headers,
+        result = self.make_request(
+            method=HttpMethod.GET,
+            path=f"/scans/{scan_id}",
             params=params,
         )
         self.config.logger.debug(f"Raw API response: {result}")
@@ -379,11 +358,9 @@ class ModelScan(BaseClient):
             print("Scan deleted successfully")
             ```
         """
-        result = self.request(
-            method="DELETE",
-            url=f"{self.endpoint_prefix}/scans/{scan_id}",
-            auth=self.auth,
-            headers=self._default_headers,
+        result = self.make_request(
+            method=HttpMethod.DELETE,
+            path=f"scans/{scan_id}",
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
@@ -406,11 +383,9 @@ class ModelScan(BaseClient):
             print("Scan canceled")
             ```
         """
-        result = self.request(
+        result = self.make_request(
             method="POST",
-            url=f"{self.endpoint_prefix}/scans/{scan_id}/cancel",
-            auth=self.auth,
-            headers=self._default_headers,
+            path=f"scans/{scan_id}/cancel",
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
@@ -464,11 +439,9 @@ class ModelScan(BaseClient):
             client.trigger_scan(scan_id)
             ```
         """
-        result = self.request(
-            method="POST",
-            url=f"{self.endpoint_prefix}/scans/{scan_id}/validate_url",
-            auth=self.auth,
-            json_data={"url": url, "type": url_type, "auth": repo_auth},
-            headers=self._default_headers,
+        result = self.make_request(
+            method=HttpMethod.POST,
+            path=f"scans/{scan_id}/validate_url",
+            data={"url": url, "type": url_type, "auth": repo_auth},
         )
         self.config.logger.debug(f"Raw API response: {result}")
