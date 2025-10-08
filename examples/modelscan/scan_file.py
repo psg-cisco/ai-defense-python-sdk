@@ -18,7 +18,8 @@
 Example: Using inspect_conversation for chat conversation inspection
 """
 from aidefense import Config
-from aidefense.modelscan import ModelScanClient, ScanStatus
+from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import ScanStatus
 
 # Initialize the client
 client = ModelScanClient(
@@ -30,36 +31,24 @@ client = ModelScanClient(
 result = client.scan_file("<FILE_PATH>")
 
 # Check the results
-status = result["scan_status_info"]["status"]
-if status == ScanStatus.COMPLETED:
+if result.status == ScanStatus.COMPLETED:
     print("✅ Scan completed successfully")
 
     # Check for threats in analysis results
-    analysis_results = result["scan_status_info"].get("analysis_results", {})
-    items = analysis_results.get("items", [])
-
-    for item in items:
-        file_name = item["name"]
-        file_status = item["status"]
-        threats = item.get("threats", {}).get("items", [])
-
-        if threats:
-            print(f"⚠️  Threats found in {file_name}:")
-            for threat in threats:
-                threat_type = threat["threat_type"]
-                severity = threat["severity"]
-                description = threat["description"]
-                details = threat.get("details", "")
-                print(f"   - {severity}: {threat_type}")
-                print(f"     Description: {description}")
-                if details:
-                    print(f"     Details: {details}")
-        elif file_status == "COMPLETED":
-            print(f"✅ {file_name} is clean")
+    for item in result.analysis_results.items:
+        if item.threats.items:
+            print(f"⚠️  Threats found in {item.name}:")
+            for threat in item.threats.items:
+                print(f"   - {threat.severity.value}: {threat.threat_type.value}")
+                print(f"     Description: {threat.description}")
+                if threat.details:
+                    print(f"     Details: {threat.details}")
+        elif item.status == ScanStatus.COMPLETED:
+            print(f"✅ {item.name} is clean")
         else:
-            print(f"ℹ️  {file_name} status: {file_status}")
-elif status == ScanStatus.FAILED:
-    print(f"❌ Scan failed: {result.get('error_message', 'Unknown error')}")
+            print(f"ℹ️  {item.name} status: {item.status.value}")
+elif result.status == ScanStatus.FAILED:
+    print(f"❌ Scan failed")
 
 if __name__ == "__main__":
     pass

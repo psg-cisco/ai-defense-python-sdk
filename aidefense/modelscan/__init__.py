@@ -16,4 +16,3 @@
 
 from .model_scan_base import ModelScan
 from .model_scan import ModelScanClient
-from .config import ScanStatus, RepoConfig, HuggingfaceRepoAuth

@@ -19,6 +19,7 @@ Example: Using inspect_conversation for chat conversation inspection
 """
 from aidefense import Config
 from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import GetScanStatusRequest
 
 # Initialize the client
 client = ModelScanClient(
@@ -28,53 +29,46 @@ client = ModelScanClient(
 
 # Get detailed information about a specific scan
 scan_id = "1d35f2b3-87cb-4e13-9849-c6aaa942648f"
-scan_info = client.get_scan(scan_id)
+request = GetScanStatusRequest(file_limit=10, file_offset=0)
+response = client.get_scan(scan_id, request)
+
 # Extract scan status info
-scan_status_info = scan_info.get("scan_status_info", {})
+scan_info = response.scan_status_info
 print(f"📊 Scan Details for {scan_id}:")
-print(f"  Status: {scan_status_info.get('status', 'Unknown')}")
-print(f"  Type: {scan_status_info.get('type', 'Unknown')}")
-print(f"  Created: {scan_status_info.get('created_at', 'Unknown')}")
-print(f"  Completed: {scan_status_info.get('completed_at', 'Not completed')}")
+print(f"  Status: {scan_info.status}")
+print(f"  Type: {scan_info.type}")
+print(f"  Created: {scan_info.created_at}")
+print(f"  Completed: {scan_info.completed_at}")
 
 # Repository info (if applicable)
-repo_info = scan_status_info.get("repository_info")
-if repo_info:
-    print(f"  Repository: {repo_info.get('url', 'Unknown')}")
-    print(f"  Files Scanned: {repo_info.get('files_scanned', 0)}")
+if scan_info.repository:
+    print(f"  Repository: {scan_info.repository.url}")
+    print(f"  Files Scanned: {scan_info.repository.files_scanned}")
 
 # Check analysis results with pagination
-analysis_results = scan_status_info.get("analysis_results", {})
-items = analysis_results.get("items", [])
-paging = analysis_results.get("paging", {})
-print(f"  Results: {len(items)} items (total: {paging.get('total', 'Unknown')})")
+analysis_results = scan_info.analysis_results
+print(f"  Results: {len(analysis_results.items)} items (total: {analysis_results.paging.total})")
 print()
 
-for item in items:
-    file_name = item.get("name", "Unknown")
-    file_status = item.get("status", "Unknown")
-    file_size = item.get("size", "Unknown")
-    threats = item.get("threats", {}).get("items", [])
-    reason = item.get("reason", "")
-
+for item in analysis_results.items:
     # Determine status icon
-    if file_status == "SKIPPED":
+    if item.status == "SKIPPED":
         status_icon = "⏭️"
-    elif threats:
+    elif item.threats.items:
         status_icon = "⚠️"
     else:
         status_icon = "✅"
 
-    print(f"    {status_icon} {file_name} ({file_size} bytes)")
-    print(f"       Status: {file_status}")
+    print(f"    {status_icon} {item.name} ({item.size} bytes)")
+    print(f"       Status: {item.status}")
 
-    if reason:
-        print(f"       Reason: {reason}")
+    if item.reason:
+        print(f"       Reason: {item.reason}")
 
-    if threats:
+    if item.threats.items:
         threat_counts = {}
-        for threat in threats:
-            severity = threat.get("severity", "Unknown")
+        for threat in item.threats.items:
+            severity = threat.severity.value
             threat_counts[severity] = threat_counts.get(severity, 0) + 1
 
         threat_summary = ", ".join([f"{severity}: {count}" for severity, count in threat_counts.items()])

@@ -24,6 +24,11 @@ from aidefense.management.auth import ManagementAuth
 from aidefense.management.base_client import BaseClient
 from aidefense.request_handler import HttpMethod
 from aidefense.runtime.auth import RuntimeAuth
+from modelscan.models import (
+    CreateScanObjectRequest, CreateScanObjectResponse, RegisterScanResponse,
+    ModelRepoConfig, ValidateModelUrlResponse, ListScansRequest,
+    ListScansResponse, GetScanStatusRequest, GetScanStatusResponse)
+from modelscan.routes import object_by_id, scan_by_id, SCAN_OBJECTS, SCANS
 
 
 class ModelScan(BaseClient):
@@ -35,10 +40,18 @@ class ModelScan(BaseClient):
     malicious code, or other risks in model files.
 
     Typical usage:
+        ```python
+        from aidefense.modelscan import ModelScan
+        from aidefense.modelscan.models import GetScanStatusRequest
+        
         client = ModelScan(api_key="your_api_key")
-        scan_result = client.scan("/path/to/model.pkl")
-        if scan_result["scan_status_info"]["status"] == ScanStatus.COMPLETED:
+        scan_id = client.register_scan().scan_id
+        # ... upload files and trigger scan ...
+        request = GetScanStatusRequest(file_limit=10, file_offset=0)
+        scan_result = client.get_scan(scan_id, request)
+        if scan_result.scan_status_info.status == ScanStatus.COMPLETED:
             print("Scan completed successfully")
+        ```
 
     Args:
         api_key (str): Your Cisco AI Defense API key for authentication.
@@ -53,7 +66,7 @@ class ModelScan(BaseClient):
     """
 
     def __init__(
-        self, api_key: str, config: Optional[Config] = None, request_handler=None):
+            self, api_key: str, config: Optional[Config] = None, request_handler=None):
         """
         Initialize a ModelScan client instance.
 
@@ -65,11 +78,7 @@ class ModelScan(BaseClient):
         super().__init__(ManagementAuth(api_key), config, request_handler)
 
     def create_scan_object(
-        self,
-        scan_id: str,
-        file_name: str,
-        size: int = 0,
-        object_config: Optional[Dict] = None) -> Tuple[str, str]:
+            self, scan_id: str, req: CreateScanObjectRequest) -> Tuple[str, str]:
         """
         Create a scan object for a file within an existing scan.
 
@@ -78,9 +87,7 @@ class ModelScan(BaseClient):
 
         Args:
             scan_id (str): The unique identifier of the scan session.
-            file_name (str): The name of the file to be scanned.
-            size (int, optional): The size of the file in bytes. Defaults to 0.
-            object_config (Dict, optional): Additional configuration for the scan object.
+            req (CreateScanObjectRequest): Request object containing file details.
 
         Returns:
             Tuple[str, str]: A tuple containing (object_id, upload_url) where:
@@ -89,23 +96,23 @@ class ModelScan(BaseClient):
 
         Example:
             ```python
+            from aidefense.modelscan.models import CreateScanObjectRequest
+            
             client = ModelScan(api_key="your_api_key")
-            scan_id = client.register_scan()
-            object_id, upload_url = client.create_scanobject(
-                scan_id=scan_id,
-                file_name="model.pkl",
-                size=1024000
-            )
+            response = client.register_scan()
+            req = CreateScanObjectRequest(file_name="model.pkl", size=1024000)
+            object_id, upload_url = client.create_scan_object(response.scan_id, req)
             ```
         """
-        result = self.make_request(
+        res = self.make_request(
             method=HttpMethod.POST,
-            path=f"/scans/{scan_id}/objects",
-            data={"file_name": file_name, "size":size, "scan_object": object_config},
+            path=f"{scan_by_id(scan_id)}/{SCAN_OBJECTS}",
+            data=req.to_body_dict(patch=True),
         )
+        result = CreateScanObjectResponse.parse_obj(res)
         self.config.logger.debug(f"Raw API response: {result}")
 
-        return result["object_id"], result["upload_url"]
+        return result.object_id, result.upload_url
 
     def upload_scan_result(self, scan_id: str, scan_object_id: str, scan_result: dict) -> None:
         """
@@ -134,7 +141,7 @@ class ModelScan(BaseClient):
         """
         result = self.make_request(
             method=HttpMethod.POST,
-            path=f"scans/{scan_id}/objects/{scan_object_id}/results",
+            path=f"{object_by_id(scan_id, scan_object_id)}/results",
             data={"scan_result": scan_result},
         )
         self.config.logger.debug(f"Raw API response: {result}")
@@ -166,12 +173,12 @@ class ModelScan(BaseClient):
         """
         result = self.make_request(
             method=HttpMethod.PUT,
-            path=f"scans/{scan_id}/complete",
+            path=f"{scan_by_id(scan_id)}/complete",
             data={"errors": errors},
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
-    def register_scan(self) -> str:
+    def register_scan(self) -> RegisterScanResponse:
         """
         Register a new scan session with the AI Defense service.
 
@@ -179,21 +186,22 @@ class ModelScan(BaseClient):
         for subsequent operations like uploading files and triggering scans.
 
         Returns:
-            str: The unique scan ID for the newly created scan session.
+            RegisterScanResponse: Response object containing scan_id and supported_file_types.
 
         Example:
             ```python
             client = ModelScan(api_key="your_api_key")
-            scan_id = client.register_scan()
-            print(f"Created new scan with ID: {scan_id}")
+            response = client.register_scan()
+            print(f"Created new scan with ID: {response.scan_id}")
             ```
         """
-        result = self.make_request(
+        res = self.make_request(
             method=HttpMethod.POST,
-            path="scans/register",
+            path=f"{SCANS}/register",
         )
+        result = RegisterScanResponse.parse_obj(res)
         self.config.logger.debug(f"Raw API response: {result}")
-        return result["scan_id"]
+        return result
 
     def upload_file(self, scan_id: str, file_path: Path) -> bool:
         """
@@ -224,10 +232,14 @@ class ModelScan(BaseClient):
             ```
         """
         file_size = file_path.stat().st_size
-        _, upload_url = self.create_scan_object(scan_id, file_path.name, file_size)
+        req = CreateScanObjectRequest(
+            file_name=file_path.name,
+            size=file_size,
+        )
+        _, upload_url = self.create_scan_object(scan_id, req)
 
         with open(file_path, 'rb') as f:
-            result = request(method="PUT", url=upload_url, data=f)
+            result = request(method=HttpMethod.PUT, url=upload_url, data=f)
         self.config.logger.debug(f"Raw API response: {result}")
         return True
 
@@ -252,51 +264,50 @@ class ModelScan(BaseClient):
         """
         result = self.make_request(
             method=HttpMethod.PUT,
-            path=f"scans/{scan_id}/run",
+            path=f"{scan_by_id(scan_id)}/run",
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
-    def list_scans(self, limit: int = 10, offset: int = 0) -> Dict:
+    def list_scans(self, req: ListScansRequest) -> ListScansResponse:
         """
         List all scans with pagination support.
 
         Retrieve a paginated list of all scan sessions associated with the current API key.
 
         Args:
-            limit (int, optional): Maximum number of scans to return per page. Defaults to 10.
-            offset (int, optional): Number of scans to skip (for pagination). Defaults to 0.
+            req (ListScansRequest): Request object with pagination and filter parameters.
 
         Returns:
-            Dict: Dictionary containing the list of scans and pagination information.
-                Typically includes 'scans' list and metadata like 'total_count'.
+            ListScansResponse: Response object containing scans list with pagination.
 
         Example:
             ```python
+            from aidefense.modelscan.models import ListScansRequest
+            
             client = ModelScan(api_key="your_api_key")
             
             # Get first 10 scans
-            scans = client.list_scans()
+            request = ListScansRequest(limit=10, offset=0)
+            response = client.list_scans(request)
             
             # Get next 10 scans
-            more_scans = client.list_scans(limit=10, offset=10)
+            next_request = ListScansRequest(limit=10, offset=10)
+            more_scans = client.list_scans(next_request)
             
-            for scan in scans.get('scans', []):
-                print(f"Scan ID: {scan['scan_id']}, Status: {scan['status']}")
+            for scan in response.scans.items:
+                print(f"Scan ID: {scan.scan_id}, Status: {scan.status}")
             ```
         """
-        params = {
-            "limit": limit,
-            "offset": offset
-        }
-        result = self.make_request(
-            method="GET",
-            path="scans",
-            params=params,
+        res = self.make_request(
+            method=HttpMethod.GET,
+            path=SCANS,
+            params=req.to_params(),
         )
+        result = ListScansResponse.parse_obj(res)
         self.config.logger.debug(f"Raw API response: {result}")
         return result
 
-    def get_scan(self, scan_id: str, limit: int = 10, offset: int = 0) -> Dict:
+    def get_scan(self, scan_id: str, req: GetScanStatusRequest) -> GetScanStatusResponse:
         """
         Get detailed information about a specific scan with pagination support for results.
 
@@ -305,37 +316,31 @@ class ModelScan(BaseClient):
 
         Args:
             scan_id (str): The unique identifier of the scan to retrieve.
-            limit (int, optional): Maximum number of scan results to return per page. Defaults to 10.
-            offset (int, optional): Number of results to skip (for pagination). Defaults to 0.
+            req (GetScanStatusRequest): Request object with pagination and filter parameters.
 
         Returns:
-            Dict: Dictionary containing detailed scan information including:
-                - scan_id: The scan identifier
-                - scan_status_info: Current status and progress
-                - results: List of scan results (paginated)
-                - metadata: Additional scan metadata
+            GetScanStatusResponse: Response object containing detailed scan status information.
 
         Example:
             ```python
-            client = ModelScan(api_key="your_api_key")
-            scan_info = client.get_scan("scan_123")
+            from aidefense.modelscan.models import GetScanStatusRequest, ScanStatus
             
-            status = scan_info.get("scan_status_info", {}).get("status")
-            if status == ScanStatus.COMPLETED:
-                results = scan_info.get("results", [])
-                for result in results:
-                    print(f"File: {result['file_name']}, Threats: {result['threats_found']}")
+            client = ModelScan(api_key="your_api_key")
+            request = GetScanStatusRequest(file_limit=10, file_offset=0)
+            response = client.get_scan("scan_123", request)
+            
+            scan_info = response.scan_status_info
+            if scan_info.status == ScanStatus.COMPLETED:
+                for file_info in scan_info.analysis_results.items:
+                    print(f"File: {file_info.name}, Threats: {len(file_info.threats.items)}")
             ```
         """
-        params = {
-            "limit": limit,
-            "offset": offset
-        }
-        result = self.make_request(
+        res = self.make_request(
             method=HttpMethod.GET,
-            path=f"/scans/{scan_id}",
-            params=params,
+            path=scan_by_id(scan_id),
+            params=req.to_params(),
         )
+        result = GetScanStatusResponse.parse_obj(res)
         self.config.logger.debug(f"Raw API response: {result}")
         return result
 
@@ -360,7 +365,7 @@ class ModelScan(BaseClient):
         """
         result = self.make_request(
             method=HttpMethod.DELETE,
-            path=f"scans/{scan_id}",
+            path=scan_by_id(scan_id),
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
@@ -389,7 +394,7 @@ class ModelScan(BaseClient):
         )
         self.config.logger.debug(f"Raw API response: {result}")
 
-    def validate_scan_url(self, scan_id: str, url: str, url_type: str, repo_auth: Dict) -> None:
+    def validate_scan_url(self, scan_id: str, req: ModelRepoConfig) -> ValidateModelUrlResponse:
         """
         Validate a repository URL for scanning with the AI Defense service.
 
@@ -398,19 +403,11 @@ class ModelScan(BaseClient):
         credentials to ensure the scan can proceed successfully.
 
         Args:
-            scan_id (str): The unique identifier of the scan session to associate
-                with this URL validation.
-            url (str): The repository URL to validate. Must be a valid repository URL
-                from a supported platform (e.g., HuggingFace).
-            url_type (str): The type of repository platform. Supported values include
-                "HUGGING_FACE" for HuggingFace repositories.
-            repo_auth (Dict): Authentication configuration for accessing the repository.
-                The structure depends on the repository type:
-                - For HuggingFace: {"access_token": "your_token"}
-                - For other platforms: platform-specific auth structure
+            scan_id (str): The unique identifier of the scan session.
+            req (ModelRepoConfig): Repository configuration with URL, type, and auth.
 
         Returns:
-            TODO add the return details, include error message
+            ValidateModelUrlResponse: Response indicating if URL is accessible with error details.
 
         Raises:
             RequestException: If the API request fails due to network issues.
@@ -419,29 +416,34 @@ class ModelScan(BaseClient):
 
         Example:
             ```python
-            from aidefense.modelscan import ModelScan, RepoConfig, HuggingfaceRepoAuth
+            from aidefense.modelscan.models import (
+                ModelRepoConfig, Auth, HuggingFaceAuth, URLType
+            )
             
             client = ModelScan(api_key="your_api_key")
             
             # Register a scan first
-            scan_id = client.register_scan()
+            response = client.register_scan()
             
             # Validate a HuggingFace repository
-            repo_auth = {"access_token": "hf_your_token_here"}
-            client.validate_scan_url(
-                scan_id=scan_id,
+            repo_config = ModelRepoConfig(
                 url="https://huggingface.co/username/model-name",
-                url_type="HUGGING_FACE",
-                repo_auth=repo_auth
+                type=URLType.HUGGING_FACE,
+                auth=Auth(huggingface=HuggingFaceAuth(access_token="hf_token"))
             )
+            result = client.validate_scan_url(response.scan_id, repo_config)
             
-            # If validation succeeds, proceed with the scan
-            client.trigger_scan(scan_id)
+            if result.is_accessible:
+                client.trigger_scan(response.scan_id)
+            else:
+                print(f"Validation failed: {result.error_message}")
             ```
         """
-        result = self.make_request(
+        res = self.make_request(
             method=HttpMethod.POST,
-            path=f"scans/{scan_id}/validate_url",
-            data={"url": url, "type": url_type, "auth": repo_auth},
+            path=f"{scan_by_id(scan_id)}/validate_url",
+            data=req.to_body_dict(),
         )
+        result = ValidateModelUrlResponse.parse_obj(res)
         self.config.logger.debug(f"Raw API response: {result}")
+        return result

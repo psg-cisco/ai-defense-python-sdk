@@ -20,7 +20,8 @@ pip install cisco-aidefense-sdk
 ### Basic File Scanning with ModelScanClient
 
 ```python
-from aidefense.modelscan import ModelScanClient, ScanStatus
+from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import ScanStatus
 from aidefense import Config
 
 # Initialize the client
@@ -33,42 +34,33 @@ client = ModelScanClient(
 result = client.scan_file("/path/to/model.pkl")
 
 # Check the results
-status = result["scan_status_info"]["status"]
-if status == ScanStatus.COMPLETED:
+if result.status == ScanStatus.COMPLETED:
     print("✅ Scan completed successfully")
     
     # Check for threats in analysis results
-    analysis_results = result["scan_status_info"].get("analysis_results", {})
-    items = analysis_results.get("items", [])
-    
-    for item in items:
-        file_name = item["name"]
-        file_status = item["status"]
-        threats = item.get("threats", {}).get("items", [])
-        
-        if threats:
-            print(f"⚠️  Threats found in {file_name}:")
-            for threat in threats:
-                threat_type = threat["threat_type"]
-                severity = threat["severity"]
-                description = threat["description"]
-                details = threat.get("details", "")
-                print(f"   - {severity}: {threat_type}")
-                print(f"     Description: {description}")
-                if details:
-                    print(f"     Details: {details}")
-        elif file_status == "COMPLETED":
-            print(f"✅ {file_name} is clean")
+    for file_info in result.analysis_results.items:
+        if file_info.threats.items:
+            print(f"⚠️  Threats found in {file_info.name}:")
+            for threat in file_info.threats.items:
+                print(f"   - {threat.severity}: {threat.threat_type}")
+                print(f"     Description: {threat.description}")
+                if threat.details:
+                    print(f"     Details: {threat.details}")
+        elif file_info.status == ScanStatus.COMPLETED:
+            print(f"✅ {file_info.name} is clean")
         else:
-            print(f"ℹ️  {file_name} status: {file_status}")
-elif status == ScanStatus.FAILED:
-    print(f"❌ Scan failed: {result.get('error_message', 'Unknown error')}")
+            print(f"ℹ️  {file_info.name} status: {file_info.status}")
+elif result.status == ScanStatus.FAILED:
+    print("❌ Scan failed")
 ```
 
 ### Repository Scanning with ModelScanClient
 
 ```python
-from aidefense.modelscan import ModelScanClient, RepoConfig, HuggingfaceRepoAuth, ScanStatus
+from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import (
+    ModelRepoConfig, Auth, HuggingFaceAuth, URLType, ScanStatus
+)
 from aidefense import Config
 
 # Initialize the client
@@ -78,47 +70,40 @@ client = ModelScanClient(
 )
 
 # Configure repository scan with authentication
-repo_config = RepoConfig(
+repo_config = ModelRepoConfig(
     url="https://huggingface.co/username/model-name",
-    auth=HuggingfaceRepoAuth(token="hf_your_token_here")
+    type=URLType.HUGGING_FACE,
+    auth=Auth(huggingface=HuggingFaceAuth(access_token="hf_your_token_here"))
 )
 
 # Scan the repository
 result = client.scan_repo(repo_config)
 
 # Process results
-status = result["scan_status_info"]["status"]
-if status == ScanStatus.COMPLETED:
+if result.status == ScanStatus.COMPLETED:
     print("✅ Repository scan completed successfully")
+    print(f"Repository: {result.repository.url}")
+    print(f"Files scanned: {result.repository.files_scanned}")
     
     # Check analysis results
-    analysis = result.get("analysis_results", {})
-    items = analysis.get("items", [])
-    
-    for item in items:
-        file_name = item["name"]
-        file_status = item["status"]
-        threats = item.get("threats", {}).get("items", [])
-        
-        if threats:
-            print(f"⚠️  Threats found in {file_name}:")
-            for threat in threats:
-                severity = threat["severity"]
-                threat_type = threat["threat_type"]
-                description = threat["description"]
-                print(f"   - {severity}: {threat_type} - {description}")
-        elif file_status == "COMPLETED":
-            print(f"✅ {file_name} is clean")
+    for file_info in result.analysis_results.items:
+        if file_info.threats.items:
+            print(f"⚠️  Threats found in {file_info.name}:")
+            for threat in file_info.threats.items:
+                print(f"   - {threat.severity}: {threat.threat_type} - {threat.description}")
+        elif file_info.status == ScanStatus.COMPLETED:
+            print(f"✅ {file_info.name} is clean")
         else:
-            print(f"ℹ️  {file_name} was {file_status.lower()}")
-elif status == ScanStatus.FAILED:
-    print(f"❌ Repository scan failed: {result.get('error_message', 'Unknown error')}")
+            print(f"ℹ️  {file_info.name} was {file_info.status}")
+elif result.status == ScanStatus.FAILED:
+    print("❌ Repository scan failed")
 ```
 
 ### Public Repository Scanning (No Authentication)
 
 ```python
-from aidefense.modelscan import ModelScanClient, RepoConfig
+from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import ModelRepoConfig, URLType
 from aidefense import Config
 
 client = ModelScanClient(
@@ -127,12 +112,13 @@ client = ModelScanClient(
 )
 
 # Scan a public repository without authentication
-public_repo_config = RepoConfig(
-    url="https://huggingface.co/username/public-model"
+public_repo_config = ModelRepoConfig(
+    url="https://huggingface.co/username/public-model",
+    type=URLType.HUGGING_FACE
 )
 
 result = client.scan_repo(public_repo_config)
-print("Public repository scan result:", result)
+print(f"Public repository scan status: {result.status}")
 ```
 
 ## Granular File Scanning with ModelScan
@@ -144,7 +130,8 @@ For more control over the scanning process, you can use the base `ModelScan` cla
 ```python
 from pathlib import Path
 from time import sleep
-from aidefense.modelscan import ModelScan, ScanStatus
+from aidefense.modelscan import ModelScan
+from aidefense.modelscan.models import ScanStatus, GetScanStatusRequest
 from aidefense import Config
 
 # Initialize the base client
@@ -154,7 +141,8 @@ client = ModelScan(
 )
 
 # Step 1: Register a new scan
-scan_id = client.register_scan()
+response = client.register_scan()
+scan_id = response.scan_id
 print(f"📝 Registered scan with ID: {scan_id}")
 
 try:
@@ -173,54 +161,43 @@ try:
     wait_time = 2
     
     for attempt in range(max_retries):
-        scan_info = client.get_scan(scan_id)
-        status = scan_info.get("scan_status_info", {}).get("status")
+        request = GetScanStatusRequest(file_limit=50, file_offset=0)
+        response = client.get_scan(scan_id, request)
+        scan_info = response.scan_status_info
         
-        print(f"📊 Scan status: {status}")
+        print(f"📊 Scan status: {scan_info.status}")
         
-        if status == ScanStatus.COMPLETED:
+        if scan_info.status == ScanStatus.COMPLETED:
             print("✅ Scan completed successfully!")
             
             # Process results
-            analysis_results = scan_info.get("analysis_results", {})
-            items = analysis_results.get("items", [])
-            
-            for item in items:
-                file_name = item.get("name", "Unknown")
-                file_status = item.get("status", "Unknown")
-                threats = item.get("threats", {}).get("items", [])
-                
-                if threats:
-                    print(f"⚠️  Threats detected in {file_name}")
-                    for threat in threats:
-                        threat_type = threat.get("threat_type", "Unknown")
-                        severity = threat.get("severity", "Unknown")
-                        description = threat.get("description", "No description")
-                        details = threat.get("details", "")
-                        print(f"   - {severity}: {threat_type}")
-                        print(f"   - Description: {description}")
-                        if details:
-                            print(f"   - Details: {details}")
-                elif file_status == "COMPLETED":
-                    print(f"✅ {file_name} is clean")
+            for file_info in scan_info.analysis_results.items:
+                if file_info.threats.items:
+                    print(f"⚠️  Threats detected in {file_info.name}")
+                    for threat in file_info.threats.items:
+                        print(f"   - {threat.severity}: {threat.threat_type}")
+                        print(f"   - Description: {threat.description}")
+                        if threat.details:
+                            print(f"   - Details: {threat.details}")
+                elif file_info.status == ScanStatus.COMPLETED:
+                    print(f"✅ {file_info.name} is clean")
                 else:
-                    print(f"ℹ️  {file_name} status: {file_status}")
+                    print(f"ℹ️  {file_info.name} status: {file_info.status}")
             break
             
-        elif status == ScanStatus.FAILED:
-            error_msg = scan_info.get("error_message", "Unknown error")
-            print(f"❌ Scan failed: {error_msg}")
+        elif scan_info.status == ScanStatus.FAILED:
+            print("❌ Scan failed")
             break
             
-        elif status == ScanStatus.CANCELED:
+        elif scan_info.status == ScanStatus.CANCELED:
             print("🚫 Scan was canceled")
             break
             
-        elif status in [ScanStatus.PENDING, ScanStatus.IN_PROGRESS]:
+        elif scan_info.status in [ScanStatus.PENDING, ScanStatus.IN_PROGRESS]:
             print(f"⏳ Scan in progress... (attempt {attempt + 1}/{max_retries})")
             sleep(wait_time)
         else:
-            print(f"❓ Unknown status: {status}")
+            print(f"❓ Unknown status: {scan_info.status}")
             sleep(wait_time)
     else:
         print("⏰ Scan timed out")
@@ -252,6 +229,7 @@ finally:
 ```python
 from aidefense import Config
 from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import ListScansRequest
 
 client = ModelScanClient(
     api_key="your_api_key",
@@ -259,36 +237,30 @@ client = ModelScanClient(
 )
 
 # Get first 10 scans
-scans_response = client.list_scans(limit=10, offset=0)
-scans_data = scans_response.get("scans", {})
-scans = scans_data.get("items", [])
-paging = scans_data.get("paging", {})
+request = ListScansRequest(limit=10, offset=0)
+response = client.list_scans(request)
 
-print(f"📋 Found {len(scans)} scans (total: {paging.get('total', 'Unknown')}):")
+scans = response.scans.items
+paging = response.scans.paging
+
+print(f"📋 Found {len(scans)} scans (total: {paging.total}):")
 for scan in scans:
-    scan_id = scan.get("scan_id", "Unknown")
-    name = scan.get("name", "Unknown")
-    scan_type = scan.get("type", "Unknown")
-    status = scan.get("status", "Unknown")
-    created_at = scan.get("created_at", "Unknown")
-    files_scanned = scan.get("files_scanned", 0)
-    issues = scan.get("issues_by_severity", {})
-    
     # Create issue summary
     issue_summary = []
-    for severity, count in issues.items():
+    for severity, count in scan.issues_by_severity.items():
         if count > 0:
             issue_summary.append(f"{severity}: {count}")
     issue_text = ", ".join(issue_summary) if issue_summary else "No issues"
     
-    print(f"  • {scan_id}")
-    print(f"    Name: {name} | Type: {scan_type} | Status: {status}")
-    print(f"    Files: {files_scanned} | Issues: {issue_text}")
-    print(f"    Created: {created_at}")
+    print(f"  • {scan.scan_id}")
+    print(f"    Name: {scan.name} | Type: {scan.type} | Status: {scan.status}")
+    print(f"    Files: {scan.files_scanned} | Issues: {issue_text}")
+    print(f"    Created: {scan.created_at}")
     print()
 
 # Get next page of scans
-more_scans = client.list_scans(limit=10, offset=10)
+next_request = ListScansRequest(limit=10, offset=10)
+more_scans = client.list_scans(next_request)
 ```
 
 ### Get Detailed Scan Information
@@ -296,6 +268,7 @@ more_scans = client.list_scans(limit=10, offset=10)
 ```python
 from aidefense import Config
 from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import GetScanStatusRequest
 
 client = ModelScanClient(
     api_key="your_api_key",
@@ -304,54 +277,46 @@ client = ModelScanClient(
 
 # Get detailed information about a specific scan
 scan_id = "your_scan_id_here"
-scan_info = client.get_scan(scan_id)
+request = GetScanStatusRequest(file_limit=10, file_offset=0)
+response = client.get_scan(scan_id, request)
 
 # Extract scan status info
-scan_status_info = scan_info.get("scan_status_info", {})
+scan_info = response.scan_status_info
 print(f"📊 Scan Details for {scan_id}:")
-print(f"  Status: {scan_status_info.get('status', 'Unknown')}")
-print(f"  Type: {scan_status_info.get('type', 'Unknown')}")
-print(f"  Created: {scan_status_info.get('created_at', 'Unknown')}")
-print(f"  Completed: {scan_status_info.get('completed_at', 'Not completed')}")
+print(f"  Status: {scan_info.status}")
+print(f"  Type: {scan_info.type}")
+print(f"  Created: {scan_info.created_at}")
+print(f"  Completed: {scan_info.completed_at}")
 
 # Repository info (if applicable)
-repo_info = scan_status_info.get("repository_info")
-if repo_info:
-    print(f"  Repository: {repo_info.get('url', 'Unknown')}")
-    print(f"  Files Scanned: {repo_info.get('files_scanned', 0)}")
+if scan_info.repository:
+    print(f"  Repository: {scan_info.repository.url}")
+    print(f"  Files Scanned: {scan_info.repository.files_scanned}")
 
 # Check analysis results with pagination
-analysis_results = scan_status_info.get("analysis_results", {})
-items = analysis_results.get("items", [])
-paging = analysis_results.get("paging", {})
-print(f"  Results: {len(items)} items (total: {paging.get('total', 'Unknown')})")
+analysis_results = scan_info.analysis_results
+print(f"  Results: {len(analysis_results.items)} items (total: {analysis_results.paging.total})")
 print()
 
-for item in items:
-    file_name = item.get("name", "Unknown")
-    file_status = item.get("status", "Unknown")
-    file_size = item.get("size", "Unknown")
-    threats = item.get("threats", {}).get("items", [])
-    reason = item.get("reason", "")
-    
+for item in analysis_results.items:
     # Determine status icon
-    if file_status == "SKIPPED":
+    if item.status == "SKIPPED":
         status_icon = "⏭️"
-    elif threats:
+    elif item.threats.items:
         status_icon = "⚠️"
     else:
         status_icon = "✅"
     
-    print(f"    {status_icon} {file_name} ({file_size} bytes)")
-    print(f"       Status: {file_status}")
+    print(f"    {status_icon} {item.name} ({item.size} bytes)")
+    print(f"       Status: {item.status}")
     
-    if reason:
-        print(f"       Reason: {reason}")
+    if item.reason:
+        print(f"       Reason: {item.reason}")
     
-    if threats:
+    if item.threats.items:
         threat_counts = {}
-        for threat in threats:
-            severity = threat.get("severity", "Unknown")
+        for threat in item.threats.items:
+            severity = threat.severity
             threat_counts[severity] = threat_counts.get(severity, 0) + 1
         
         threat_summary = ", ".join([f"{severity}: {count}" for severity, count in threat_counts.items()])
@@ -399,20 +364,20 @@ Currently supported repository types and their authentication methods:
 #### HuggingFace Repositories
 
 ```python
-from aidefense.modelscan import HuggingfaceRepoAuth, RepoConfig
+from aidefense.modelscan.models import ModelRepoConfig, Auth, HuggingFaceAuth, URLType
 
 # Create HuggingFace authentication
-auth = HuggingfaceRepoAuth(token="hf_your_access_token_here")
+auth = Auth(huggingface=HuggingFaceAuth(access_token="hf_your_access_token_here"))
 
 # Use with repository configuration
-repo_config = RepoConfig(
+repo_config = ModelRepoConfig(
     url="https://huggingface.co/username/model-name",
+    type=URLType.HUGGING_FACE,
     auth=auth
 )
 
-# The RepoConfig automatically detects the repository type
-print(f"Repository type: {repo_config.url_type}")  # UrlType.HUGGING_FACE
-print(f"Auth config: {repo_config.config}")  # {"huggingface": {"access_token": "hf_..."}}
+print(f"Repository type: {repo_config.type}")  # URLType.HUGGING_FACE
+print(f"Repository URL: {repo_config.url}")
 ```
 
 ## Scan Status Reference
@@ -435,7 +400,8 @@ Always clean up scan resources, especially when using the granular `ModelScan` c
 ```python
 scan_id = None
 try:
-    scan_id = client.register_scan()
+    response = client.register_scan()
+    scan_id = response.scan_id
     # ... perform scan operations
 except Exception as e:
     if scan_id:
@@ -452,17 +418,19 @@ Implement appropriate timeouts for long-running scans:
 
 ```python
 import time
+from aidefense.modelscan.models import ScanStatus, GetScanStatusRequest
 
 def wait_for_scan_completion(client, scan_id, max_wait_time=300, check_interval=5):
     """Wait for scan completion with timeout."""
     start_time = time.time()
     
     while time.time() - start_time < max_wait_time:
-        scan_info = client.get_scan(scan_id)
-        status = scan_info.get("scan_status_info", {}).get("status")
+        request = GetScanStatusRequest(file_limit=10, file_offset=0)
+        response = client.get_scan(scan_id, request)
+        status = response.scan_status_info.status
         
         if status in [ScanStatus.COMPLETED, ScanStatus.FAILED, ScanStatus.CANCELED]:
-            return scan_info
+            return response.scan_status_info
             
         time.sleep(check_interval)
     

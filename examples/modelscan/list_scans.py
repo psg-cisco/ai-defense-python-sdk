@@ -19,6 +19,7 @@ Example: Using inspect_conversation for chat conversation inspection
 """
 from aidefense import Config
 from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import ListScansRequest
 
 # Initialize the client
 client = ModelScanClient(
@@ -27,36 +28,30 @@ client = ModelScanClient(
 )
 
 # Get first 10 scans
-scans_response = client.list_scans(limit=10, offset=0)
-scans_data = scans_response.get("scans", {})
-scans = scans_data.get("items", [])
-paging = scans_data.get("paging", {})
+request = ListScansRequest(limit=10, offset=0)
+response = client.list_scans(request)
 
-print(f"📋 Found {len(scans)} scans (total: {paging.get('total', 'Unknown')}):")
+scans = response.scans.items
+paging = response.scans.paging
+
+print(f"📋 Found {len(scans)} scans (total: {paging.total}):")
 for scan in scans:
-    scan_id = scan.get("scan_id", "Unknown")
-    name = scan.get("name", "Unknown")
-    scan_type = scan.get("type", "Unknown")
-    status = scan.get("status", "Unknown")
-    created_at = scan.get("created_at", "Unknown")
-    files_scanned = scan.get("files_scanned", 0)
-    issues = scan.get("issues_by_severity", {})
-
     # Create issue summary
     issue_summary = []
-    for severity, count in issues.items():
+    for severity, count in scan.issues_by_severity.items():
         if count > 0:
             issue_summary.append(f"{severity}: {count}")
     issue_text = ", ".join(issue_summary) if issue_summary else "No issues"
 
-    print(f"  • {scan_id}")
-    print(f"    Name: {name} | Type: {scan_type} | Status: {status}")
-    print(f"    Files: {files_scanned} | Issues: {issue_text}")
-    print(f"    Created: {created_at}")
+    print(f"  • {scan.scan_id}")
+    print(f"    Name: {scan.name} | Type: {scan.type.value} | Status: {scan.status}")
+    print(f"    Files: {scan.files_scanned} | Issues: {issue_text}")
+    print(f"    Created: {scan.created_at}")
     print()
 
 # Get next page of scans
-more_scans = client.list_scans(limit=10, offset=10)
+next_request = ListScansRequest(limit=10, offset=10)
+more_scans = client.list_scans(next_request)
 
 if __name__ == "__main__":
     pass

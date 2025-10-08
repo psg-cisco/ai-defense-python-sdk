@@ -18,7 +18,10 @@
 Example: Using inspect_conversation for chat conversation inspection
 """
 from aidefense import Config
-from aidefense.modelscan import ModelScanClient, RepoConfig, HuggingfaceRepoAuth, ScanStatus
+from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import (
+    ModelRepoConfig, HuggingFaceAuth, Auth, URLType, ScanStatus
+)
 
 # Initialize the client
 client = ModelScanClient(
@@ -27,41 +30,31 @@ client = ModelScanClient(
 )
 
 # Configure repository scan with authentication
-repo_config = RepoConfig(
+repo_config = ModelRepoConfig(
     url="<REPO_URL>",
-    auth=HuggingfaceRepoAuth(token="<YOUR_TOKEN>")
+    type=URLType.HUGGING_FACE,
+    auth=Auth(huggingface=HuggingFaceAuth(access_token="<YOUR_TOKEN>"))
 )
 
 # Scan the repository
 result = client.scan_repo(repo_config)
 
 # Process results
-status = result["scan_status_info"]["status"]
-if status == ScanStatus.COMPLETED:
+if result.status == ScanStatus.COMPLETED:
     print("✅ Repository scan completed successfully")
 
     # Check analysis results
-    analysis = result["scan_status_info"].get("analysis_results", {})
-    items = analysis.get("items", [])
-
-    for item in items:
-        file_name = item["name"]
-        file_status = item["status"]
-        threats = item.get("threats", {}).get("items", [])
-
-        if threats:
-            print(f"⚠️  Threats found in {file_name}:")
-            for threat in threats:
-                severity = threat["severity"]
-                threat_type = threat["threat_type"]
-                description = threat["description"]
-                print(f"   - {severity}: {threat_type} - {description}")
-        elif file_status == "COMPLETED":
-            print(f"✅ {file_name} is clean")
+    for item in result.analysis_results.items:
+        if item.threats.items:
+            print(f"⚠️  Threats found in {item.name}:")
+            for threat in item.threats.items:
+                print(f"   - {threat.severity.value}: {threat.threat_type.value} - {threat.description}")
+        elif item.status == ScanStatus.COMPLETED:
+            print(f"✅ {item.name} is clean")
         else:
-            print(f"ℹ️  {file_name} was {file_status.lower()}")
-elif status == ScanStatus.FAILED:
-    print(f"❌ Repository scan failed: {result.get('error_message', 'Unknown error')}")
+            print(f"ℹ️  {item.name} was {item.status.value.lower()}")
+elif result.status == ScanStatus.FAILED:
+    print(f"❌ Repository scan failed")
 
 if __name__ == "__main__":
     pass
