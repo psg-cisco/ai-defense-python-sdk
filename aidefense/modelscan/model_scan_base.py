@@ -24,11 +24,11 @@ from aidefense.management.auth import ManagementAuth
 from aidefense.management.base_client import BaseClient
 from aidefense.request_handler import HttpMethod
 from aidefense.runtime.auth import RuntimeAuth
-from modelscan.models import (
+from aidefense.modelscan.models import (
     CreateScanObjectRequest, CreateScanObjectResponse, RegisterScanResponse,
     ModelRepoConfig, ValidateModelUrlResponse, ListScansRequest,
     ListScansResponse, GetScanStatusRequest, GetScanStatusResponse)
-from modelscan.routes import object_by_id, scan_by_id, SCAN_OBJECTS, SCANS
+from aidefense.modelscan.routes import object_by_id, scan_by_id, SCAN_OBJECTS, SCANS
 
 
 class ModelScan(BaseClient):
