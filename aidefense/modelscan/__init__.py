@@ -14,21 +14,5 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-AI Defense Python SDK
-Convenient imports for all major SDK components.
-"""
-
-from .runtime import *
-from .config import Config
-from .exceptions import ValidationError, ApiError, SDKError
-from .modelscan import ModelScanClient
-
-# Import management API components
-from .management import (
-    ManagementClient,
-    ApplicationManagementClient,
-    ConnectionManagementClient,
-    PolicyManagementClient,
-    EventManagementClient,
-)
+from .model_scan_base import ModelScan
+from .model_scan import ModelScanClient
