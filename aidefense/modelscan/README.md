@@ -136,7 +136,7 @@ from aidefense import Config
 
 # Initialize the base client
 client = ModelScan(
-    api_key="your_api_key",
+    api_key="YOUR_MANAGEMENT_API_KEY",
     config=Config(management_base_url="https://api.security.cisco.com")
 )
 

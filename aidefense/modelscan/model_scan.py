@@ -46,7 +46,7 @@ class ModelScanClient(ModelScan):
         
         # Initialize the client
         client = ModelScanClient(
-            api_key="your_api_key",
+            api_key="YOUR_MANAGEMENT_API_KEY",
             config=Config(management_base_url="https://api.security.cisco.com")
         )
         
@@ -135,7 +135,7 @@ class ModelScanClient(ModelScan):
             from aidefense.modelscan import ModelScanClient
             from aidefense.modelscan.models import ScanStatus
             
-            client = ModelScanClient(api_key="your_api_key")
+            client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
             
             try:
                 # Scan a pickle file
@@ -208,7 +208,7 @@ class ModelScanClient(ModelScan):
                 ModelRepoConfig, Auth, HuggingFaceAuth, URLType, ScanStatus
             )
             
-            client = ModelScanClient(api_key="your_api_key")
+            client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
             
             try:
                 # Configure repository scan
