@@ -125,7 +125,7 @@ from aidefense.modelscan import ModelScanClient
 from aidefense.modelscan.models import ScanStatus
 
 # Initialize client
-client = ModelScanClient(api_key="YOUR_API_KEY")
+client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
 
 # Scan a local model file
 result = client.scan_file("/path/to/model.pkl")
@@ -250,7 +250,7 @@ from aidefense.modelscan import ModelScanClient
 from aidefense.modelscan.models import ScanStatus
 
 # Initialize client
-client = ModelScanClient(api_key="YOUR_API_KEY")
+client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
 
 # Scan a local model file
 result = client.scan_file("/path/to/model.pkl")
@@ -281,7 +281,7 @@ from aidefense.modelscan.models import (
 )
 
 # Initialize client
-client = ModelScanClient(api_key="YOUR_API_KEY")
+client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
 
 # Configure repository scan with authentication
 repo_config = ModelRepoConfig(
@@ -313,7 +313,7 @@ from aidefense.modelscan.models import (
     ListScansRequest, GetScanStatusRequest
 )
 
-client = ModelScanClient(api_key="YOUR_API_KEY")
+client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
 
 # List all scans with pagination
 request = ListScansRequest(limit=10, offset=0)
