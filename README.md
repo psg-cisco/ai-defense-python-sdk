@@ -15,6 +15,7 @@ Integrate AI-powered security, privacy, and safety inspections into your Python 
 - [Usage Examples](#usage-examples)
   - [Chat Inspection](#chat-inspection)
   - [HTTP Inspection](#http-inspection)
+  - [Model Scanning](#model-scanning)
   - [Management API](#management-api)
 - [Configuration](#configuration)
 - [Advanced Usage](#advanced-usage)
@@ -38,6 +39,7 @@ The SDK enables you to detect security, privacy, and safety risks in real time, 
 
 - **Chat Inspection**: Analyze chat prompts, responses, or full conversations for risks.
 - **HTTP Inspection**: Inspect HTTP requests and responses, including support for `requests.Request`, `requests.PreparedRequest`, and `requests.Response` objects.
+- **Model Scanning**: Scan AI/ML model files and repositories for security threats, malicious code, and vulnerabilities.
 - **Management API**: Create and manage applications, connections, policies, and events through a clean, intuitive API.
 - **Strong Input Validation**: Prevent malformed requests and catch errors early.
 - **Flexible Configuration**: Easily customize logging, retry policies, and connection pooling.
@@ -116,6 +118,25 @@ result = client.inspect_prompt("How do I hack a server?")
 print(result.classifications, result.is_safe)
 ```
 
+### Model Scanning API
+
+```python
+from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import ScanStatus
+
+# Initialize client
+client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
+
+# Scan a local model file
+result = client.scan_file("/path/to/model.pkl")
+if result.status == ScanStatus.COMPLETED:
+    for file_info in result.analysis_results.items:
+        if file_info.threats.items:
+            print(f"⚠️ Threats found in {file_info.name}")
+        else:
+            print(f"✅ {file_info.name} is clean")
+```
+
 ### Management API
 
 ```python
@@ -145,6 +166,11 @@ print(f"Created application with ID: {result.application_id}")
 - `runtime/chat_inspect.py` — ChatInspectionClient for chat-related inspection
 - `runtime/http_inspect.py` — HttpInspectionClient for HTTP request/response inspection
 - `runtime/models.py` — Data models and enums for requests, responses, rules, etc.
+
+### Model Scanning API
+- `modelscan/model_scan.py` — ModelScanClient for high-level file and repository scanning
+- `modelscan/model_scan_base.py` — ModelScan base class for granular scan operations
+- `modelscan/models.py` — Data models for scan requests, responses, and status information
 
 ### Management API
 - `management/__init__.py` — ManagementClient for accessing all management APIs
@@ -213,6 +239,98 @@ print(result.is_safe)
 req = requests.Request("GET", "https://example.com").prepare()
 result = client.inspect_request_from_http_library(req)
 print(result.is_safe)
+```
+
+### Model Scanning
+
+#### Scanning Local Files
+
+```python
+from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import ScanStatus
+
+# Initialize client
+client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
+
+# Scan a local model file
+result = client.scan_file("/path/to/model.pkl")
+
+# Check the results
+if result.status == ScanStatus.COMPLETED:
+    print("✅ Scan completed successfully")
+    
+    # Check for threats in each file
+    for file_info in result.analysis_results.items:
+        if file_info.threats.items:
+            print(f"⚠️  Threats found in {file_info.name}:")
+            for threat in file_info.threats.items:
+                print(f"   - {threat.severity}: {threat.threat_type}")
+                print(f"     {threat.description}")
+        else:
+            print(f"✅ {file_info.name} is clean")
+elif result.status == ScanStatus.FAILED:
+    print("❌ Scan failed")
+```
+
+#### Scanning Repositories
+
+```python
+from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import (
+    ModelRepoConfig, Auth, HuggingFaceAuth, URLType, ScanStatus
+)
+
+# Initialize client
+client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
+
+# Configure repository scan with authentication
+repo_config = ModelRepoConfig(
+    url="https://huggingface.co/username/model-name",
+    type=URLType.HUGGING_FACE,
+    auth=Auth(huggingface=HuggingFaceAuth(access_token="YOUR_HF_TOKEN"))
+)
+
+# Scan the repository
+result = client.scan_repo(repo_config)
+
+# Process results
+if result.status == ScanStatus.COMPLETED:
+    print("✅ Repository scan completed")
+    print(f"Repository: {result.repository.url}")
+    print(f"Files scanned: {result.repository.files_scanned}")
+    
+    # Check for threats
+    for file_info in result.analysis_results.items:
+        if file_info.threats.items:
+            print(f"⚠️  Threats in {file_info.name}")
+```
+
+#### Listing and Managing Scans
+
+```python
+from aidefense.modelscan import ModelScanClient
+from aidefense.modelscan.models import (
+    ListScansRequest, GetScanStatusRequest
+)
+
+client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
+
+# List all scans with pagination
+request = ListScansRequest(limit=10, offset=0)
+response = client.list_scans(request)
+
+print(f"Found {response.scans.paging.total} scans")
+for scan in response.scans.items:
+    print(f"  • {scan.scan_id}: {scan.name} - {scan.status}")
+
+# Get detailed information about a specific scan
+scan_id = response.scans.items[0].scan_id
+detail_request = GetScanStatusRequest(file_limit=10, file_offset=0)
+detail_response = client.get_scan(scan_id, detail_request)
+
+scan_info = detail_response.scan_status_info
+print(f"Scan status: {scan_info.status}")
+print(f"Files analyzed: {len(scan_info.analysis_results.items)}")
 ```
 
 ### Management API
