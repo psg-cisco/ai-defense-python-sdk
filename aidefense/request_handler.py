@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Base client implementation for interacting with APIs."""
+from enum import Enum
 
 import requests
 import uuid
@@ -28,6 +29,14 @@ from .exceptions import SDKError, ValidationError, ApiError
 
 REQUEST_ID_HEADER = "x-aidefense-request-id"
 
+class HttpMethod(str, Enum):
+    GET = "GET"
+    PUT = "PUT"
+    POST = "POST"
+    DELETE = "DELETE"
+    PATCH = "PATCH"
+    HEAD = "HEAD"
+    OPTIONS = "OPTIONS"
 
 class BaseRequestHandler(ABC):
     """
