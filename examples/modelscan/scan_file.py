@@ -28,7 +28,7 @@ client = ModelScanClient(
 )
 
 # Scan a local file
-result = client.scan_file("<FILE_PATH>")
+result = client.scan_file("FILE_PATH")
 
 # Check the results
 if result.status == ScanStatus.COMPLETED:

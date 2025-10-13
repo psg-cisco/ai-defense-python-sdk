@@ -44,7 +44,7 @@ class ModelScan(BaseClient):
         from aidefense.modelscan import ModelScan
         from aidefense.modelscan.models import GetScanStatusRequest
         
-        client = ModelScan(api_key="your_api_key")
+        client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
         scan_id = client.register_scan().scan_id
         # ... upload files and trigger scan ...
         request = GetScanStatusRequest(file_limit=10, file_offset=0)
@@ -98,7 +98,7 @@ class ModelScan(BaseClient):
             ```python
             from aidefense.modelscan.models import CreateScanObjectRequest
             
-            client = ModelScan(api_key="your_api_key")
+            client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
             response = client.register_scan()
             req = CreateScanObjectRequest(file_name="model.pkl", size=1024000)
             object_id, upload_url = client.create_scan_object(response.scan_id, req)
@@ -127,7 +127,7 @@ class ModelScan(BaseClient):
 
         Example:
             ```python
-            client = ModelScan(api_key="your_api_key")
+            client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
             scan_result = {
                 "threats_found": False,
                 "scan_details": {"file_type": "pickle", "threats": []}
@@ -160,7 +160,7 @@ class ModelScan(BaseClient):
 
         Example:
             ```python
-            client = ModelScan(api_key="your_api_key")
+            client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
             # After completing all scan operations
             client.mark_scan_completed(scan_id="scan_123")
             
@@ -190,7 +190,7 @@ class ModelScan(BaseClient):
 
         Example:
             ```python
-            client = ModelScan(api_key="your_api_key")
+            client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
             response = client.register_scan()
             print(f"Created new scan with ID: {response.scan_id}")
             ```
@@ -221,7 +221,7 @@ class ModelScan(BaseClient):
             ```python
             from pathlib import Path
             
-            client = ModelScan(api_key="your_api_key")
+            client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
             scan_id = client.register_scan()
             success = client.upload_file(
                 scan_id=scan_id,
@@ -255,7 +255,7 @@ class ModelScan(BaseClient):
 
         Example:
             ```python
-            client = ModelScan(api_key="your_api_key")
+            client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
             scan_id = client.register_scan()
             client.upload_file(scan_id, Path("model.pkl"))
             client.trigger_scan(scan_id)
@@ -284,7 +284,7 @@ class ModelScan(BaseClient):
             ```python
             from aidefense.modelscan.models import ListScansRequest
             
-            client = ModelScan(api_key="your_api_key")
+            client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
             
             # Get first 10 scans
             request = ListScansRequest(limit=10, offset=0)
@@ -325,7 +325,7 @@ class ModelScan(BaseClient):
             ```python
             from aidefense.modelscan.models import GetScanStatusRequest, ScanStatus
             
-            client = ModelScan(api_key="your_api_key")
+            client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
             request = GetScanStatusRequest(file_limit=10, file_offset=0)
             response = client.get_scan("scan_123", request)
             
@@ -356,7 +356,7 @@ class ModelScan(BaseClient):
 
         Example:
             ```python
-            client = ModelScan(api_key="your_api_key")
+            client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
             
             # Delete a completed scan
             client.delete_scan("scan_123")
@@ -381,7 +381,7 @@ class ModelScan(BaseClient):
 
         Example:
             ```python
-            client = ModelScan(api_key="your_api_key")
+            client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
             
             # Cancel a running scan
             client.cancel_scan("scan_123")
@@ -420,7 +420,7 @@ class ModelScan(BaseClient):
                 ModelRepoConfig, Auth, HuggingFaceAuth, URLType
             )
             
-            client = ModelScan(api_key="your_api_key")
+            client = ModelScan(api_key="YOUR_MANAGEMENT_API_KEY")
             
             # Register a scan first
             response = client.register_scan()
