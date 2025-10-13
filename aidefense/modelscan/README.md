@@ -26,7 +26,7 @@ from aidefense import Config
 
 # Initialize the client
 client = ModelScanClient(
-    api_key="your_api_key",
+    api_key="YOUR_MANAGEMENT_API_KEY",
     config=Config(management_base_url="https://api.security.cisco.com")
 )
 
@@ -65,7 +65,7 @@ from aidefense import Config
 
 # Initialize the client
 client = ModelScanClient(
-    api_key="your_api_key",
+    api_key="YOUR_MANAGEMENT_API_KEY",
     config=Config(management_base_url="https://api.security.cisco.com")
 )
 
@@ -107,7 +107,7 @@ from aidefense.modelscan.models import ModelRepoConfig, URLType
 from aidefense import Config
 
 client = ModelScanClient(
-    api_key="your_api_key",
+    api_key="YOUR_MANAGEMENT_API_KEY",
     config=Config(management_base_url="https://api.security.cisco.com")
 )
 
@@ -232,7 +232,7 @@ from aidefense.modelscan import ModelScanClient
 from aidefense.modelscan.models import ListScansRequest
 
 client = ModelScanClient(
-    api_key="your_api_key",
+    api_key="YOUR_MANAGEMENT_API_KEY",
     config=Config(management_base_url="https://api.security.cisco.com")
 )
 
@@ -271,7 +271,7 @@ from aidefense.modelscan import ModelScanClient
 from aidefense.modelscan.models import GetScanStatusRequest
 
 client = ModelScanClient(
-    api_key="your_api_key",
+    api_key="YOUR_MANAGEMENT_API_KEY",
     config=Config(management_base_url="https://api.security.cisco.com")
 )
 
@@ -332,7 +332,7 @@ from aidefense import Config
 from aidefense.modelscan import ModelScanClient
 
 client = ModelScanClient(
-    api_key="your_api_key",
+    api_key="YOUR_MANAGEMENT_API_KEY",
     config=Config(management_base_url="https://api.security.cisco.com")
 )
 

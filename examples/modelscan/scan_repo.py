@@ -25,15 +25,15 @@ from aidefense.modelscan.models import (
 
 # Initialize the client
 client = ModelScanClient(
-    api_key="<YOUR_API_KEY>",
-    config=Config(management_base_url="<YOUR_BASE_URL>")
+    api_key="YOUR_MANAGEMENT_API_KEY",
+    config=Config(management_base_url="https://api.security.cisco.com")
 )
 
 # Configure repository scan with authentication
 repo_config = ModelRepoConfig(
-    url="<REPO_URL>",
+    url="HUGGINGFACE_REPO_URL",
     type=URLType.HUGGING_FACE,
-    auth=Auth(huggingface=HuggingFaceAuth(access_token="<YOUR_TOKEN>"))
+    auth=Auth(huggingface=HuggingFaceAuth(access_token="YOUR_HUGGINGFACE_TOKEN"))
 )
 
 # Scan the repository
