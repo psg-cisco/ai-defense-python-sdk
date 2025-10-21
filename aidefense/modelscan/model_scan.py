@@ -18,7 +18,7 @@ from pathlib import Path
 from time import sleep
 from typing import Dict, Union
 
-from .model_scan_base import ModelScan
+from .model_scan_base import ModelScan, MAX_FILE_SIZE_BYTES
 from .models import ScanStatus, ModelRepoConfig, ScanStatusInfo, GetScanStatusRequest
 
 RETRY_COUNT_FOR_SCANNING = 30
@@ -159,8 +159,10 @@ class ModelScanClient(ModelScan):
                 print(f"Scan error: {e}")
             ```
         """
-        res = self.register_scan()
         file_path = Path(file_path)
+        self._validate_file_for_upload(file_path)
+
+        res = self.register_scan()
         try:
             self.upload_file(res.scan_id, file_path)
             self.trigger_scan(res.scan_id)

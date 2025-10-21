@@ -30,6 +30,8 @@ from aidefense.modelscan.models import (
     ListScansResponse, GetScanStatusRequest, GetScanStatusResponse)
 from aidefense.modelscan.routes import object_by_id, scan_by_id, SCAN_OBJECTS, SCANS
 
+# Maximum file size in bytes (5GB)
+MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 * 1024
 
 class ModelScan(BaseClient):
     """
@@ -203,6 +205,15 @@ class ModelScan(BaseClient):
         self.config.logger.debug(f"Raw API response: {result}")
         return result
 
+    def _validate_file_for_upload(self, file_path: Path) -> None:
+        if file_path.exists() is False:
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        file_size = file_path.stat().st_size
+        if file_size > MAX_FILE_SIZE_BYTES:
+            raise ValueError(f"File size exceeds limit (allowed {MAX_FILE_SIZE_BYTES} bytes)")
+
+
     def upload_file(self, scan_id: str, file_path: Path) -> bool:
         """
         Upload a file to be scanned within an existing scan session.
@@ -231,10 +242,12 @@ class ModelScan(BaseClient):
                 print("File uploaded successfully")
             ```
         """
-        file_size = file_path.stat().st_size
+        file_path = Path(file_path)
+        self._validate_file_for_upload(file_path)
+
         req = CreateScanObjectRequest(
             file_name=file_path.name,
-            size=file_size,
+            size=file_path.stat().st_size,
         )
         _, upload_url = self.create_scan_object(scan_id, req)
 
