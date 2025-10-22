@@ -16,7 +16,7 @@
 
 from pathlib import Path
 from time import sleep
-from typing import Dict, Union
+from typing import Union
 
 from .model_scan_base import ModelScan
 from .models import ScanStatus, ModelRepoConfig, ScanStatusInfo, GetScanStatusRequest
@@ -149,9 +149,6 @@ class ModelScanClient(ModelScan):
                     for file_info in result.analysis_results.items:
                         if file_info.threats.items:
                             print(f"⚠️  Threats found in {file_info.name}")
-                            for threat in file_info.threats.items:
-                                print(f"   - {threat.severity}: {threat.threat_type}")
-                                print(f"     {threat.description}")
                         else:
                             print(f"✅ {file_info.name} is clean")
                             
@@ -162,8 +159,10 @@ class ModelScanClient(ModelScan):
                 print(f"Scan error: {e}")
             ```
         """
-        res = self.register_scan()
         file_path = Path(file_path)
+        self._validate_file_for_upload(file_path)
+
+        res = self.register_scan()
         try:
             self.upload_file(res.scan_id, file_path)
             self.trigger_scan(res.scan_id)
@@ -225,18 +224,13 @@ class ModelScanClient(ModelScan):
                 if result.status == ScanStatus.COMPLETED:
                     print("Repository scan completed successfully")
                     
-                    # Check analysis results
+                    # Check for threats
                     for file_info in result.analysis_results.items:
                         if file_info.threats.items:
-                            print(f"⚠️  Threats found in {file_info.name}:")
-                            for threat in file_info.threats.items:
-                                print(f"   - {threat.severity}: {threat.threat_type}")
-                                print(f"     {threat.description}")
-                        elif file_info.status == ScanStatus.COMPLETED:
-                            print(f"✅ {file_info.name} is clean")
+                            print(f"⚠️  Threats found in {file_info.name}")
                         else:
-                            print(f"ℹ️  {file_info.name} was {file_info.status}")
-                            
+                            print(f"✅ {file_info.name} is clean")
+
                 elif result.status == ScanStatus.FAILED:
                     print("Repository scan failed")
                     
