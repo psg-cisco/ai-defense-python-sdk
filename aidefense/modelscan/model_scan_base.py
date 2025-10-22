@@ -31,7 +31,10 @@ from aidefense.modelscan.models import (
 from aidefense.modelscan.routes import object_by_id, scan_by_id, SCAN_OBJECTS, SCANS
 
 # Maximum file size in bytes (5GB)
-MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 * 1024
+KB = 1024
+MB = 1024 * KB
+GB = 1024 * MB
+MAX_FILE_SIZE_BYTES = 5 * GB
 
 class ModelScan(BaseClient):
     """
@@ -211,7 +214,7 @@ class ModelScan(BaseClient):
 
         file_size = file_path.stat().st_size
         if file_size > MAX_FILE_SIZE_BYTES:
-            raise ValueError(f"File size exceeds limit (allowed {MAX_FILE_SIZE_BYTES} bytes)")
+            raise ValueError(f"File size exceeds limit (allowed {MAX_FILE_SIZE_BYTES//GB} GB)")
 
 
     def upload_file(self, scan_id: str, file_path: Path) -> bool:

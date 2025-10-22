@@ -16,9 +16,9 @@
 
 from pathlib import Path
 from time import sleep
-from typing import Dict, Union
+from typing import Union
 
-from .model_scan_base import ModelScan, MAX_FILE_SIZE_BYTES
+from .model_scan_base import ModelScan
 from .models import ScanStatus, ModelRepoConfig, ScanStatusInfo, GetScanStatusRequest
 
 RETRY_COUNT_FOR_SCANNING = 30
