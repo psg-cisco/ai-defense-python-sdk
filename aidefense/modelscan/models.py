@@ -390,7 +390,7 @@ class ScanStatusInfo(AIDefenseModel):
     scan_id: str = Field(..., description="Unique scan identifier")
     status: ScanStatus = Field(..., description="Current scan status")
     created_at: datetime = Field(..., description="Creation timestamp")
-    completed_at: datetime = Field(..., description="Completion timestamp")
+    completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
     type: AnalysisType = Field(..., description="Analysis type")
     repository: Optional[RepositoryInfo] = Field(None, description="Repository information")
     analysis_results: AnalysisResult = Field(..., description="Analysis results")
