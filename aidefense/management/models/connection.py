@@ -46,6 +46,7 @@ class ConnectionType(str, Enum):
 
     API = "API"
     Gateway = "Gateway"
+    Unspecified = "Unspecified"
 
 
 class ConnectionSortBy(str, Enum):
