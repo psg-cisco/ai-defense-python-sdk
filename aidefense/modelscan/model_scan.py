@@ -23,7 +23,7 @@ from .model_scan_base import ModelScan
 from .models import ScanStatus, ModelRepoConfig, ScanStatusInfo, GetScanStatusRequest
 
 RETRY_COUNT_FOR_SCANNING = 30
-WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK = 2
+WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK = 5
 END_SCAN_STATUS = [ScanStatus.COMPLETED, ScanStatus.FAILED, ScanStatus.CANCELED]
 
 class ModelScanClient(ModelScan):

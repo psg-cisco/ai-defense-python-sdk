@@ -27,7 +27,7 @@ from aidefense import Config
 from aidefense.modelscan import ModelScanClient
 from aidefense.modelscan.models import GetScanStatusRequest
 # Import utility functions for displaying results
-from examples.modelscan.utils import print_analysis_results
+from examples.modelscan.utils import enum_or_str_value, print_analysis_results
 
 
 def format_timestamp(timestamp: datetime) -> str:
@@ -69,8 +69,8 @@ def get_scan_details(client, scan_id: str, file_limit: int = 10, file_offset: in
         print("\n📊 Scan Overview:")
         print("=" * 50)
         print(f"  ID:          {scan_id}")
-        print(f"  Status:      {scan_info.status.value}")
-        print(f"  Type:        {scan_info.type.value}")
+        print(f"  Status:      {enum_or_str_value(scan_info.status)}")
+        print(f"  Type:        {enum_or_str_value(scan_info.type)}")
         print(f"  Created:     {format_timestamp(scan_info.created_at)}")
         print(f"  Completed:   {format_timestamp(scan_info.completed_at)}")
 

@@ -20,6 +20,7 @@ Example: Using inspect_conversation for chat conversation inspection
 from aidefense import Config
 from aidefense.modelscan import ModelScanClient
 from aidefense.modelscan.models import ListScansRequest
+from examples.modelscan.utils import enum_or_str_value
 
 # Initialize the client
 client = ModelScanClient(
@@ -44,7 +45,9 @@ for scan in scans:
     issue_text = ", ".join(issue_summary) if issue_summary else "No issues"
 
     print(f"  • {scan.scan_id}")
-    print(f"    Name: {scan.name} | Type: {scan.type.value} | Status: {scan.status}")
+    print(
+        f"    Name: {scan.name} | Type: {enum_or_str_value(scan.type)} | Status: {enum_or_str_value(scan.status)}"
+    )
     print(f"    Files: {scan.files_scanned} | Issues: {issue_text}")
     print(f"    Created: {scan.created_at}")
     print()
