@@ -27,7 +27,7 @@ from aidefense.modelscan.models import (
 )
 
 # Import utility functions for displaying results
-from examples.modelscan.utils import print_analysis_results
+from examples.modelscan.utils import enum_or_str_value, print_analysis_results
 
 def main():
     # Initialize the client
@@ -55,18 +55,20 @@ def main():
         if hasattr(result, 'scan_id') and result.scan_id:
             print(f"🔑 Scan ID:     {result.scan_id}")
 
-        if result.status == ScanStatus.COMPLETED:
+        status_value = enum_or_str_value(result.status)
+
+        if status_value == ScanStatus.COMPLETED.value:
             print("✅ Repository scan completed successfully\n")
             
             # Display analysis results using the utility function
             print_analysis_results(result.analysis_results)
                     
-        elif result.status == ScanStatus.FAILED:
+        elif status_value == ScanStatus.FAILED.value:
             print("❌ Repository scan failed")
             if hasattr(result, 'error_message') and result.error_message:
                 print(f"Error: {result.error_message}")
         else:
-            print(f"ℹ️  Scan status: {result.status.value}")
+            print(f"ℹ️  Scan status: {status_value}")
             
     except Exception as e:
         print(f"\n❌ An error occurred during scanning:")

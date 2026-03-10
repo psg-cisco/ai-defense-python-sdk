@@ -17,7 +17,7 @@
 """
 Utility functions for displaying scan results in the AI Defense Python SDK examples.
 """
-from typing import List
+from typing import Any, List
 
 from aidefense.modelscan.models import (
     Technique,
@@ -30,16 +30,23 @@ from aidefense.modelscan.models import (
 
 def format_severity(severity: Severity) -> str:
     """Format severity with appropriate emoji and color."""
-    if severity == Severity.CRITICAL:
-        return f"🔴 {severity.value}"
-    elif severity == Severity.HIGH:
-        return f"🟠 {severity.value}"
-    elif severity == Severity.MEDIUM:
-        return f"🟡 {severity.value}"
-    elif severity == Severity.LOW:
-        return f"🔵 {severity.value}"
+    severity_value = enum_or_str_value(severity)
+
+    if severity_value == Severity.CRITICAL.value:
+        return f"🔴 {severity_value}"
+    elif severity_value == Severity.HIGH.value:
+        return f"🟠 {severity_value}"
+    elif severity_value == Severity.MEDIUM.value:
+        return f"🟡 {severity_value}"
+    elif severity_value == Severity.LOW.value:
+        return f"🔵 {severity_value}"
     else:
-        return f"⚪ {severity.value}"
+        return f"⚪ {severity_value}"
+
+
+def enum_or_str_value(value: Any) -> str:
+    """Return a display value for enum-like objects or plain strings."""
+    return value.value if hasattr(value, "value") else str(value)
 
 
 def print_threats(techniques: List[Technique], indent: int = 0) -> None:
@@ -69,7 +76,7 @@ def print_threats(techniques: List[Technique], indent: int = 0) -> None:
                 print(f"{indent_str}  │  └─ Detections:")
                 for threat in sub_technique.items:
                     print(
-                        f"{indent_str}  │     • {threat.threat_type.value}: {threat.description}"
+                        f"{indent_str}  │     • {enum_or_str_value(threat.threat_type)}: {threat.description}"
                     )
                     if threat.details:
                         print(f"{indent_str}  │       Details: {threat.details}")
@@ -78,8 +85,10 @@ def print_threats(techniques: List[Technique], indent: int = 0) -> None:
 
 def print_file_info(file_info: FileInfo) -> None:
     """Print information about a scanned file and its threats."""
+    status_value = enum_or_str_value(file_info.status)
+
     # Determine status icon
-    if file_info.status == ScanStatus.SKIPPED:
+    if status_value == ScanStatus.SKIPPED.value:
         status_icon = "⏭️"
     elif file_info.threats.items:
         status_icon = "⚠️"
@@ -87,7 +96,7 @@ def print_file_info(file_info: FileInfo) -> None:
         status_icon = "✅"
 
     print(f"\n{status_icon} {file_info.name} ({file_info.size} bytes)")
-    print(f"  Status: {file_info.status.value}")
+    print(f"  Status: {status_value}")
 
     if file_info.reason:
         print(f"  Reason: {file_info.reason}")
@@ -97,7 +106,7 @@ def print_file_info(file_info: FileInfo) -> None:
         print("\n  🚨 Threats Detected:")
         print("  " + "-" * 45)
         print_threats(file_info.threats.items, indent=2)
-    elif file_info.status == ScanStatus.COMPLETED:
+    elif status_value == ScanStatus.COMPLETED.value:
         print("  ✅ No threats detected")
 
 
