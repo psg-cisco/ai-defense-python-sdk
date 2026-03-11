@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from pathlib import Path
 from time import sleep
 from typing import Union
@@ -22,8 +23,12 @@ from aidefense import ValidationError
 from .model_scan_base import ModelScan
 from .models import ScanStatus, ModelRepoConfig, ScanStatusInfo, GetScanStatusRequest
 
-RETRY_COUNT_FOR_SCANNING = 30
-WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK = 5
+RETRY_COUNT_FOR_SCANNING = int(
+    os.environ.get("AIDEFENSE_MODELSCAN_RETRY_COUNT", "30")
+)
+WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK = int(
+    os.environ.get("AIDEFENSE_MODELSCAN_WAIT_TIME_SECS", "5")
+)
 END_SCAN_STATUS = [ScanStatus.COMPLETED, ScanStatus.FAILED, ScanStatus.CANCELED]
 
 class ModelScanClient(ModelScan):
