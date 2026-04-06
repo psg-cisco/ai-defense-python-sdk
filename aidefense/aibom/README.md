@@ -22,7 +22,7 @@ pip install cisco-aidefense-sdk
 If you want to use `AiBomClient.analyze(...)`, install the optional AIBOM extra:
 
 ```bash
-pip install "cisco-aidefense-sdk[aibom]"
+pip install "cisco-aidefense-sdk[cisco-aibom]"
 ```
 
 ## Quick Start

@@ -32,7 +32,7 @@ tenacity = "^9.1.2"
 cisco-aibom = {version = ">=0.4.0", optional = true, python = ">=3.11,<3.14"}
 
 [tool.poetry.extras]
-aibom = ["cisco-aibom"]
+cisco-aibom = ["cisco-aibom"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.0"

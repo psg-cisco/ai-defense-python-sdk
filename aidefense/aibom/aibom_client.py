@@ -57,7 +57,7 @@ class AiBomClient:
         if analyze is None:
             raise ModuleNotFoundError(
                 "Optional dependency 'cisco-aibom' is required for AiBomClient.analyze(). "
-                "Install it with: poetry install --extras aibom"
+                "Install it with: poetry install --extras cisco-aibom"
             )
 
         source_list = self._validate_and_normalize_sources(sources)
