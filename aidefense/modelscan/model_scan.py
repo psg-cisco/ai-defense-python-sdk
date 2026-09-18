@@ -16,6 +16,7 @@
 
 import os
 from pathlib import Path
+import sys
 from time import monotonic, sleep
 from typing import Collection, Optional, Union
 
@@ -35,6 +36,40 @@ DEFAULT_SCAN_TIMEOUT_SECONDS = (
     RETRY_COUNT_FOR_SCANNING * WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK
 )
 END_SCAN_STATUS = [ScanStatus.COMPLETED, ScanStatus.FAILED, ScanStatus.CANCELED]
+STATUS_SPINNER_REFRESH_SECONDS = 0.1
+
+
+class _ConsoleStatusSpinner:
+    """Render scan polling activity without adding a third-party dependency."""
+
+    _FRAMES = ("|", "/", "-", "\\")
+
+    def __init__(self):
+        self._frame_index = 0
+        self._rendered = False
+
+    def render(self) -> None:
+        frame = self._FRAMES[self._frame_index % len(self._FRAMES)]
+        self._frame_index += 1
+        self._rendered = True
+        print(
+            f"\r{frame} Upload complete. Waiting for scan status...",
+            end="",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def wait(self, seconds: float) -> None:
+        elapsed = 0.0
+        while elapsed < seconds:
+            self.render()
+            delay = min(STATUS_SPINNER_REFRESH_SECONDS, seconds - elapsed)
+            sleep(delay)
+            elapsed += delay
+
+    def close(self) -> None:
+        if self._rendered:
+            print("\r" + " " * 64 + "\r", end="", file=sys.stderr, flush=True)
 
 
 class ModelScanClient(ModelScan):
@@ -91,6 +126,7 @@ class ModelScanClient(ModelScan):
         scan_id: str,
         statuses: Collection[ScanStatus],
         timeout_seconds: float = DEFAULT_SCAN_TIMEOUT_SECONDS,
+        show_spinner: bool = True,
     ) -> ScanStatusInfo:
         """
         Wait for a scan to reach one of the specified status values.
@@ -102,6 +138,7 @@ class ModelScanClient(ModelScan):
             scan_id (str): The unique identifier of the scan to monitor.
             statuses: Acceptable status values to wait for.
             timeout_seconds: Maximum time to wait for a terminal status.
+            show_spinner: Show a console spinner between status polls.
 
         Returns:
             ScanStatusInfo: The scan status information when the target status is reached.
@@ -117,24 +154,37 @@ class ModelScanClient(ModelScan):
             raise ValueError("scan_timeout_seconds must be greater than zero")
 
         deadline = monotonic() + timeout_seconds
-        while True:
-            info = self.get_scan(
-                scan_id,
-                GetScanStatusRequest(
-                    file_limit=50,
-                    file_offset=0,
-                    query=None,
-                    severity=None,
-                    risk_category=None,
-                ),
-            )
-            if info and info.scan_status_info.status in statuses:
-                return info.scan_status_info
+        spinner = _ConsoleStatusSpinner() if show_spinner else None
+        try:
+            if spinner:
+                spinner.render()
+            while True:
+                info = self.get_scan(
+                    scan_id,
+                    GetScanStatusRequest(
+                        file_limit=50,
+                        file_offset=0,
+                        query=None,
+                        severity=None,
+                        risk_category=None,
+                    ),
+                )
+                if info and info.scan_status_info.status in statuses:
+                    return info.scan_status_info
 
-            remaining_seconds = deadline - monotonic()
-            if remaining_seconds <= 0:
-                break
-            sleep(min(WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK, remaining_seconds))
+                remaining_seconds = deadline - monotonic()
+                if remaining_seconds <= 0:
+                    break
+                wait_seconds = min(
+                    WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK, remaining_seconds
+                )
+                if spinner:
+                    spinner.wait(wait_seconds)
+                else:
+                    sleep(wait_seconds)
+        finally:
+            if spinner:
+                spinner.close()
 
         raise ScanTimeoutError(
             (
@@ -149,7 +199,9 @@ class ModelScanClient(ModelScan):
 
     def cleanup_scan_data(self, scan_id: str) -> None:
         self.cancel_scan(scan_id)
-        self.__get_scan_info_wait_until_status(scan_id, [ScanStatus.CANCELED])
+        self.__get_scan_info_wait_until_status(
+            scan_id, [ScanStatus.CANCELED], show_spinner=False
+        )
         self.delete_scan(scan_id)
 
     def scan_file(
@@ -159,6 +211,7 @@ class ModelScanClient(ModelScan):
         max_concurrency: int = DEFAULT_MULTIPART_CONCURRENCY,
         show_progress: bool = True,
         progress_callback: Optional[UploadProgressCallback] = None,
+        show_status_spinner: bool = True,
         scan_timeout_seconds: float = DEFAULT_SCAN_TIMEOUT_SECONDS,
     ) -> ScanStatusInfo:
         """
@@ -176,6 +229,7 @@ class ModelScanClient(ModelScan):
                 Defaults to 10 and must be between 1 and 32.
             show_progress (bool): Show a console upload progress bar. Defaults to True.
             progress_callback: Optional callback receiving uploaded and total bytes.
+            show_status_spinner: Show a spinner while waiting for scan results.
             scan_timeout_seconds: Maximum time to wait for scan analysis. Defaults to
                 150 seconds. Upload time is not included.
 
@@ -239,6 +293,7 @@ class ModelScanClient(ModelScan):
                 res.scan_id,
                 END_SCAN_STATUS,
                 timeout_seconds=scan_timeout_seconds,
+                show_spinner=show_status_spinner,
             )
         except ScanTimeoutError:
             raise
@@ -253,6 +308,7 @@ class ModelScanClient(ModelScan):
         self,
         repo_config: ModelRepoConfig,
         *,
+        show_status_spinner: bool = True,
         scan_timeout_seconds: float = DEFAULT_SCAN_TIMEOUT_SECONDS,
     ) -> ScanStatusInfo:  # type: ignore
         """
@@ -266,6 +322,7 @@ class ModelScanClient(ModelScan):
         Args:
             repo_config (ModelRepoConfig): Configuration object containing the repository
                 URL, type, authentication credentials, and other scan parameters.
+            show_status_spinner: Show a spinner while waiting for scan results.
             scan_timeout_seconds: Maximum time to wait for scan analysis. Defaults to
                 150 seconds.
 
@@ -332,6 +389,7 @@ class ModelScanClient(ModelScan):
                 res.scan_id,
                 END_SCAN_STATUS,
                 timeout_seconds=scan_timeout_seconds,
+                show_spinner=show_status_spinner,
             )
         except ScanTimeoutError:
             raise

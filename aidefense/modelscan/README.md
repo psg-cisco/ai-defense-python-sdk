@@ -64,6 +64,9 @@ Each worker streams only its assigned file range, so the SDK does not load the e
 part per worker—into memory. If any part fails after its retry budget is exhausted, the SDK aborts the
 multipart upload before propagating the error.
 
+Once upload completes, `scan_file()` shows a spinner while it polls the scan status. Disable it with
+`show_status_spinner=False`; this does not affect polling or the upload progress bar.
+
 After upload, `scan_file()` waits up to 150 seconds by default for analysis to reach a terminal state.
 This polling timeout can be changed with `scan_timeout_seconds`. If it expires, the SDK raises
 `ScanTimeoutError` without canceling or deleting the scan. The exception includes `scan_id`, which can

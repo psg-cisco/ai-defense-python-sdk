@@ -21,7 +21,7 @@ import requests
 
 from aidefense.config import Config
 from aidefense.exceptions import SDKError, ScanTimeoutError
-from aidefense.modelscan.model_scan import ModelScanClient
+from aidefense.modelscan.model_scan import ModelScanClient, _ConsoleStatusSpinner
 from aidefense.modelscan.model_scan_base import (
     ModelScan,
     _BoundedFileReader,
@@ -183,6 +183,18 @@ def test_console_upload_progress_renders_bar(capsys):
     assert "50.0%" in output
     assert "100.0%" in output
     assert "[##########]" in output
+
+
+def test_console_status_spinner_renders_waiting_message(capsys):
+    spinner = _ConsoleStatusSpinner()
+
+    with patch("aidefense.modelscan.model_scan.sleep") as mock_sleep:
+        spinner.wait(0.2)
+    spinner.close()
+
+    output = capsys.readouterr().err
+    assert "Upload complete. Waiting for scan status" in output
+    assert mock_sleep.call_count == 2
 
 
 def test_upload_file_refreshes_expired_part_url(model_scan, tmp_path):
@@ -347,6 +359,7 @@ def test_scan_file_uses_multipart_upload_and_forwards_concurrency(tmp_path):
         max_concurrency=4,
         show_progress=False,
         progress_callback=progress_callback,
+        show_status_spinner=False,
         scan_timeout_seconds=600,
     )
 
@@ -362,6 +375,7 @@ def test_scan_file_uses_multipart_upload_and_forwards_concurrency(tmp_path):
     client.trigger_scan.assert_called_once_with("scan-id")
     wait_call = client._ModelScanClient__get_scan_info_wait_until_status.call_args
     assert wait_call.kwargs["timeout_seconds"] == 600
+    assert wait_call.kwargs["show_spinner"] is False
 
 
 def test_scan_timeout_preserves_scan_and_explains_status_retrieval(tmp_path):
@@ -381,6 +395,7 @@ def test_scan_timeout_preserves_scan_and_explains_status_retrieval(tmp_path):
             client.scan_file(
                 file_path,
                 show_progress=False,
+                show_status_spinner=False,
                 scan_timeout_seconds=1,
             )
 
