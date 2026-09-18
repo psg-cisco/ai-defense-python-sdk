@@ -65,8 +65,10 @@ service to enforce the configured maximum file size when the scan object is crea
 single-PUT upload path continues to enforce its 5 GiB client-side limit.
 
 Each worker streams only its assigned file range, so the SDK does not load the entire model—or one full
-part per worker—into memory. If any part fails after its retry budget is exhausted, the SDK aborts the
-multipart upload before propagating the error.
+part per worker—into memory. The SDK keeps a bounded two-batch window of presigned URLs and queues the
+next batch before the current batch drains, preventing slow parts at a batch boundary from idling the
+worker pool. If any part fails after its retry budget is exhausted, the SDK aborts the multipart upload
+before propagating the error.
 
 Once upload completes, `scan_file()` shows a spinner while it polls the scan status. Disable it with
 `show_status_spinner=False`; this does not affect polling or the upload progress bar.

@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 import sys
 from threading import Lock, local
@@ -552,10 +552,16 @@ class ModelScan(BaseClient):
             part_numbers = list(range(1, part_count + 1))
             try:
                 with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
-                    for batch_start in range(0, len(part_numbers), PART_URL_BATCH_SIZE):
+                    next_part_index = 0
+                    futures = {}
+
+                    def submit_next_batch() -> None:
+                        nonlocal next_part_index
                         batch_part_numbers = part_numbers[
-                            batch_start : batch_start + PART_URL_BATCH_SIZE
+                            next_part_index : next_part_index + PART_URL_BATCH_SIZE
                         ]
+                        if not batch_part_numbers:
+                            return
                         urls_response = self.get_multipart_upload_part_urls(
                             scan_id,
                             object_id,
@@ -575,14 +581,26 @@ class ModelScan(BaseClient):
                                 "The service did not return every requested multipart upload URL"
                             )
 
-                        futures = {
-                            executor.submit(
+                        for number in batch_part_numbers:
+                            future = executor.submit(
                                 upload_part, number, upload_urls[number]
-                            ): number
-                            for number in batch_part_numbers
-                        }
-                        for future in as_completed(futures):
-                            part_number = futures[future]
+                            )
+                            futures[future] = number
+                        next_part_index += len(batch_part_numbers)
+
+                    # Keep at most two URL batches in flight. This bounds URL age and
+                    # memory while allowing workers to cross batch boundaries without
+                    # waiting for the slowest part in the preceding batch.
+                    while (
+                        next_part_index < len(part_numbers)
+                        and len(futures) < 2 * PART_URL_BATCH_SIZE
+                    ):
+                        submit_next_batch()
+
+                    while futures:
+                        done, _ = wait(futures, return_when=FIRST_COMPLETED)
+                        for future in done:
+                            part_number = futures.pop(future)
                             completed_parts.append(future.result())
                             uploaded_bytes += min(
                                 part_size_bytes,
@@ -590,6 +608,12 @@ class ModelScan(BaseClient):
                             )
                             if progress_callback:
                                 progress_callback(uploaded_bytes, file_size)
+
+                        if (
+                            next_part_index < len(part_numbers)
+                            and len(futures) <= PART_URL_BATCH_SIZE
+                        ):
+                            submit_next_batch()
             finally:
                 for worker_session in worker_sessions:
                     worker_session.close()

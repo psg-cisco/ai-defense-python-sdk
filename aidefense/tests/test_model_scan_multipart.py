@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -137,6 +139,54 @@ def test_upload_file_requests_urls_in_32_part_batches_and_completes(
         f'"etag-{part_number}"' for part_number in range(1, 34)
     ]
     model_scan.abort_multipart_upload.assert_not_called()
+
+
+def test_upload_file_prefetches_next_url_batch_before_current_batch_drains(
+    model_scan, tmp_path
+):
+    file_path = tmp_path / "model.safetensors"
+    file_path.write_bytes(b"x" * 65)
+    first_part_started = Event()
+    release_first_part = Event()
+    second_batch_requested = Event()
+    third_batch_requested = Event()
+    model_scan.create_multipart_scan_object = MagicMock(
+        return_value=multipart_create_response(part_size_bytes=1)
+    )
+
+    def get_part_urls(_scan_id, _object_id, request):
+        if request.part_numbers == list(range(33, 65)):
+            second_batch_requested.set()
+        elif request.part_numbers == [65]:
+            third_batch_requested.set()
+        return part_urls(request.part_numbers)
+
+    def upload_part(_path, part_number, *_args, **_kwargs):
+        if part_number == 1:
+            first_part_started.set()
+            release_first_part.wait(timeout=10)
+        return f'"etag-{part_number}"'
+
+    model_scan.get_multipart_upload_part_urls = MagicMock(side_effect=get_part_urls)
+    model_scan._upload_multipart_part = MagicMock(side_effect=upload_part)
+    model_scan.complete_multipart_upload = MagicMock()
+
+    with ThreadPoolExecutor(max_workers=1) as caller:
+        result = caller.submit(
+            model_scan.upload_file,
+            "scan-id",
+            file_path,
+            max_concurrency=1,
+            show_progress=False,
+        )
+        assert first_part_started.wait(timeout=5)
+        try:
+            assert second_batch_requested.wait(timeout=5)
+            assert third_batch_requested.wait(timeout=0.2) is False
+        finally:
+            release_first_part.set()
+
+        assert result.result(timeout=10) is True
 
 
 def test_upload_file_reports_successfully_uploaded_bytes(model_scan, tmp_path):
