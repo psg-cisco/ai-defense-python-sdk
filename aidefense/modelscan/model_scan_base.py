@@ -56,7 +56,8 @@ from aidefense.modelscan.routes import (
     scan_by_id,
 )
 
-# Maximum file size in bytes (5GB)
+# Maximum file size for the legacy single-PUT upload path (5 GiB).
+# Multipart upload limits are enforced by the service when the object is created.
 KB = 1024
 MB = 1024 * KB
 GB = 1024 * MB
@@ -371,14 +372,16 @@ class ModelScan(BaseClient):
         self.config.logger.debug(f"Raw API response: {result}")
         return result
 
-    def _validate_file_for_upload(self, file_path: Path) -> None:
+    def _validate_file_for_upload(
+        self, file_path: Path, *, enforce_max_size: bool = True
+    ) -> None:
         if file_path.exists() is False:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         file_size = file_path.stat().st_size
         if file_size <= 0:
             raise ValueError("File must not be empty")
-        if file_size > MAX_FILE_SIZE_BYTES:
+        if enforce_max_size and file_size > MAX_FILE_SIZE_BYTES:
             raise ValueError(
                 f"File size exceeds limit (allowed {MAX_FILE_SIZE_BYTES//GB} GB)"
             )
@@ -654,7 +657,9 @@ class ModelScan(BaseClient):
             ```
         """
         file_path = Path(file_path)
-        self._validate_file_for_upload(file_path)
+        self._validate_file_for_upload(
+            file_path, enforce_max_size=not use_multipart_upload
+        )
 
         console_progress = _ConsoleUploadProgress() if show_progress else None
 

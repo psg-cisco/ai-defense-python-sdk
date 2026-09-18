@@ -276,7 +276,7 @@ class ModelScanClient(ModelScan):
             ```
         """
         file_path = Path(file_path)
-        self._validate_file_for_upload(file_path)
+        self._validate_file_for_upload(file_path, enforce_max_size=False)
 
         res = self.register_scan()
         try:

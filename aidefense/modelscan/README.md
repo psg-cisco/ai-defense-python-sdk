@@ -60,6 +60,10 @@ reduced for constrained systems without changing the multipart contract:
 result = client.scan_file("/path/to/large-model.safetensors", max_concurrency=4)
 ```
 
+For multipart uploads, the SDK validates that the file exists and is not empty, then relies on the
+service to enforce the configured maximum file size when the scan object is created. The legacy
+single-PUT upload path continues to enforce its 5 GiB client-side limit.
+
 Each worker streams only its assigned file range, so the SDK does not load the entire model—or one full
 part per worker—into memory. If any part fails after its retry budget is exhausted, the SDK aborts the
 multipart upload before propagating the error.

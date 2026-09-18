@@ -23,6 +23,7 @@ from aidefense.config import Config
 from aidefense.exceptions import SDKError, ScanTimeoutError
 from aidefense.modelscan.model_scan import ModelScanClient, _ConsoleStatusSpinner
 from aidefense.modelscan.model_scan_base import (
+    MAX_FILE_SIZE_BYTES,
     ModelScan,
     _BoundedFileReader,
     _ConsoleUploadProgress,
@@ -317,6 +318,34 @@ def test_empty_file_is_rejected_before_scan_object_creation(model_scan, tmp_path
         model_scan.upload_file("scan-id", file_path)
 
 
+def test_multipart_upload_defers_file_size_limit_to_service(model_scan, tmp_path):
+    file_path = tmp_path / "large-model.safetensors"
+    with file_path.open("wb") as model_file:
+        model_file.truncate(MAX_FILE_SIZE_BYTES + 1)
+    model_scan._upload_file_multipart = MagicMock(return_value=True)
+
+    assert model_scan.upload_file("scan-id", file_path, show_progress=False) is True
+
+    model_scan._upload_file_multipart.assert_called_once()
+
+
+def test_legacy_upload_retains_client_side_file_size_limit(model_scan, tmp_path):
+    file_path = tmp_path / "large-model.safetensors"
+    with file_path.open("wb") as model_file:
+        model_file.truncate(MAX_FILE_SIZE_BYTES + 1)
+    model_scan.create_scan_object = MagicMock()
+
+    with pytest.raises(ValueError, match="File size exceeds limit"):
+        model_scan.upload_file(
+            "scan-id",
+            file_path,
+            use_multipart_upload=False,
+            show_progress=False,
+        )
+
+    model_scan.create_scan_object.assert_not_called()
+
+
 def test_legacy_single_part_upload_remains_available(model_scan, tmp_path):
     file_path = tmp_path / "model.pkl"
     file_path.write_bytes(b"data")
@@ -376,6 +405,37 @@ def test_scan_file_uses_multipart_upload_and_forwards_concurrency(tmp_path):
     wait_call = client._ModelScanClient__get_scan_info_wait_until_status.call_args
     assert wait_call.kwargs["timeout_seconds"] == 600
     assert wait_call.kwargs["show_spinner"] is False
+
+
+def test_scan_file_defers_file_size_limit_to_multipart_service(tmp_path):
+    file_path = tmp_path / "large-model.safetensors"
+    with file_path.open("wb") as model_file:
+        model_file.truncate(MAX_FILE_SIZE_BYTES + 1)
+    client = ModelScanClient(api_key=TEST_API_KEY, request_handler=MagicMock())
+    client.register_scan = MagicMock(return_value=MagicMock(scan_id="scan-id"))
+    client.upload_file = MagicMock(return_value=True)
+    client.trigger_scan = MagicMock()
+    expected_scan_info = MagicMock()
+    client._ModelScanClient__get_scan_info_wait_until_status = MagicMock(
+        return_value=expected_scan_info
+    )
+
+    result = client.scan_file(
+        file_path,
+        show_progress=False,
+        show_status_spinner=False,
+    )
+
+    assert result is expected_scan_info
+    client.register_scan.assert_called_once_with()
+    client.upload_file.assert_called_once_with(
+        "scan-id",
+        file_path,
+        use_multipart_upload=True,
+        max_concurrency=10,
+        show_progress=False,
+        progress_callback=None,
+    )
 
 
 def test_scan_timeout_preserves_scan_and_explains_status_retrieval(tmp_path):
