@@ -23,7 +23,13 @@ import requests
 
 from aidefense.config import Config
 from aidefense.exceptions import SDKError, ScanTimeoutError
-from aidefense.modelscan.model_scan import ModelScanClient, _ConsoleStatusSpinner
+from aidefense.modelscan.model_scan import (
+    DEFAULT_SCAN_TIMEOUT_SECONDS,
+    RETRY_COUNT_FOR_SCANNING,
+    WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK,
+    ModelScanClient,
+    _ConsoleStatusSpinner,
+)
 from aidefense.modelscan.model_scan_base import (
     MAX_FILE_SIZE_BYTES,
     ModelScan,
@@ -246,6 +252,12 @@ def test_console_status_spinner_renders_waiting_message(capsys):
     output = capsys.readouterr().err
     assert "Upload complete. Waiting for scan status" in output
     assert mock_sleep.call_count == 2
+
+
+def test_default_scan_timeout_is_ten_minutes():
+    assert RETRY_COUNT_FOR_SCANNING == 120
+    assert WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK == 5
+    assert DEFAULT_SCAN_TIMEOUT_SECONDS == 10 * 60
 
 
 def test_upload_file_refreshes_expired_part_url(model_scan, tmp_path):

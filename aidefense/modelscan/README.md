@@ -73,7 +73,7 @@ before propagating the error.
 Once upload completes, `scan_file()` shows a spinner while it polls the scan status. Disable it with
 `show_status_spinner=False`; this does not affect polling or the upload progress bar.
 
-After upload, `scan_file()` waits up to 150 seconds by default for analysis to reach a terminal state.
+After upload, `scan_file()` waits up to 10 minutes by default for analysis to reach a terminal state.
 This polling timeout can be changed with `scan_timeout_seconds`. If it expires, the SDK raises
 `ScanTimeoutError` without canceling or deleting the scan. The exception includes `scan_id`, which can
 be passed to `get_scan()` to retrieve the result later.

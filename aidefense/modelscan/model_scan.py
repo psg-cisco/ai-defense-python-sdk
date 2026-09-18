@@ -28,7 +28,7 @@ from .model_scan_base import (
 )
 from .models import ScanStatus, ModelRepoConfig, ScanStatusInfo, GetScanStatusRequest
 
-RETRY_COUNT_FOR_SCANNING = int(os.environ.get("AIDEFENSE_MODELSCAN_RETRY_COUNT", "30"))
+RETRY_COUNT_FOR_SCANNING = int(os.environ.get("AIDEFENSE_MODELSCAN_RETRY_COUNT", "120"))
 WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK = int(
     os.environ.get("AIDEFENSE_MODELSCAN_WAIT_TIME_SECS", "5")
 )
@@ -231,7 +231,7 @@ class ModelScanClient(ModelScan):
             progress_callback: Optional callback receiving uploaded and total bytes.
             show_status_spinner: Show a spinner while waiting for scan results.
             scan_timeout_seconds: Maximum time to wait for scan analysis. Defaults to
-                150 seconds. Upload time is not included.
+                600 seconds. Upload time is not included.
 
         Returns:
             ScanStatusInfo: Complete scan status information including:
@@ -324,7 +324,7 @@ class ModelScanClient(ModelScan):
                 URL, type, authentication credentials, and other scan parameters.
             show_status_spinner: Show a spinner while waiting for scan results.
             scan_timeout_seconds: Maximum time to wait for scan analysis. Defaults to
-                150 seconds.
+                600 seconds.
 
         Returns:
             ScanStatusInfo: Complete scan status information including:
