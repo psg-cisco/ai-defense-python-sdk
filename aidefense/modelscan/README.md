@@ -5,6 +5,7 @@ The AI Defense ModelScan module provides comprehensive security scanning capabil
 ## Features
 
 - **File Scanning**: Scan individual model files for security threats and malicious code
+- **Multipart File Uploads**: Stream large model files directly to object storage with bounded parallelism, per-part retries, and cleanup on failure
 - **Repository Scanning**: Scan entire model repositories from platforms like HuggingFace
 - **Multiple Scan Approaches**: High-level client for convenience or granular control for custom workflows
 - **Comprehensive Results**: Detailed threat detection and analysis results
@@ -48,6 +49,18 @@ if result.status == ScanStatus.COMPLETED:
 elif result.status == ScanStatus.FAILED:
     print("❌ Scan failed")
 ```
+
+`scan_file()` uses multipart upload by default. The service selects the part size, the SDK requests
+presigned URLs in batches of at most 32, and up to 10 parts are uploaded concurrently. Concurrency can
+be reduced for constrained systems without changing the multipart contract:
+
+```python
+result = client.scan_file("/path/to/large-model.safetensors", max_concurrency=4)
+```
+
+Each worker streams only its assigned file range, so the SDK does not load the entire model—or one full
+part per worker—into memory. If any part fails after its retry budget is exhausted, the SDK aborts the
+multipart upload before propagating the error.
 
 ### Repository Scanning with ModelScanClient
 
@@ -141,7 +154,7 @@ print(f"📝 Registered scan with ID: {scan_id}")
 try:
     # Step 2: Upload the file
     file_path = Path("/path/to/model.pkl")
-    success = client.upload_file(scan_id, file_path)
+    success = client.upload_file(scan_id, file_path, max_concurrency=10)
     if success:
         print(f"📤 Successfully uploaded {file_path.name}")
     

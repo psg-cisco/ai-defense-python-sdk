@@ -17,19 +17,18 @@
 import os
 from pathlib import Path
 from time import sleep
-from typing import Union
+from typing import Collection, Union
 
 from aidefense import ValidationError
-from .model_scan_base import ModelScan
+from .model_scan_base import DEFAULT_MULTIPART_CONCURRENCY, ModelScan
 from .models import ScanStatus, ModelRepoConfig, ScanStatusInfo, GetScanStatusRequest
 
-RETRY_COUNT_FOR_SCANNING = int(
-    os.environ.get("AIDEFENSE_MODELSCAN_RETRY_COUNT", "30")
-)
+RETRY_COUNT_FOR_SCANNING = int(os.environ.get("AIDEFENSE_MODELSCAN_RETRY_COUNT", "30"))
 WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK = int(
     os.environ.get("AIDEFENSE_MODELSCAN_WAIT_TIME_SECS", "5")
 )
 END_SCAN_STATUS = [ScanStatus.COMPLETED, ScanStatus.FAILED, ScanStatus.CANCELED]
+
 
 class ModelScanClient(ModelScan):
     """
@@ -49,18 +48,18 @@ class ModelScanClient(ModelScan):
             ModelRepoConfig, Auth, HuggingFaceAuth, URLType, ScanStatus
         )
         from aidefense import Config
-        
+
         # Initialize the client
         client = ModelScanClient(
             api_key="YOUR_MANAGEMENT_API_KEY",
             config=Config(management_base_url="https://api.security.cisco.com")
         )
-        
+
         # Scan a local file
         file_result = client.scan_file("/path/to/model.pkl")
         if file_result.status == ScanStatus.COMPLETED:
             print("File scan completed")
-        
+
         # Scan a repository
         repo_config = ModelRepoConfig(
             url="https://huggingface.co/username/model-name",
@@ -79,7 +78,10 @@ class ModelScanClient(ModelScan):
         - auth: Authentication handler
         - endpoint_prefix: Base URL for API endpoints
     """
-    def __get_scan_info_wait_until_status(self, scan_id: str, status: [ScanStatus]) -> ScanStatusInfo:
+
+    def __get_scan_info_wait_until_status(
+        self, scan_id: str, statuses: Collection[ScanStatus]
+    ) -> ScanStatusInfo:
         """
         Wait for a scan to reach one of the specified status values.
 
@@ -88,7 +90,7 @@ class ModelScanClient(ModelScan):
 
         Args:
             scan_id (str): The unique identifier of the scan to monitor.
-            status (List[ScanStatus]): List of acceptable status values to wait for.
+            statuses: Acceptable status values to wait for.
 
         Returns:
             ScanStatusInfo: The scan status information when the target status is reached.
@@ -97,8 +99,17 @@ class ModelScanClient(ModelScan):
             Exception: If the scan times out before reaching the target status.
         """
         for _ in range(RETRY_COUNT_FOR_SCANNING):
-            info = self.get_scan(scan_id, GetScanStatusRequest(file_limit=50, file_offset=0))
-            if info and info.scan_status_info.status in status:
+            info = self.get_scan(
+                scan_id,
+                GetScanStatusRequest(
+                    file_limit=50,
+                    file_offset=0,
+                    query=None,
+                    severity=None,
+                    risk_category=None,
+                ),
+            )
+            if info and info.scan_status_info.status in statuses:
                 return info.scan_status_info
 
             sleep(WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK)
@@ -107,11 +118,15 @@ class ModelScanClient(ModelScan):
 
     def cleanup_scan_data(self, scan_id: str) -> None:
         self.cancel_scan(scan_id)
-        self.__get_scan_info_wait_until_status(scan_id, ScanStatus.CANCELED)
+        self.__get_scan_info_wait_until_status(scan_id, [ScanStatus.CANCELED])
         self.delete_scan(scan_id)
 
-
-    def scan_file(self, file_path: Union[Path, str]) -> ScanStatusInfo:
+    def scan_file(
+        self,
+        file_path: Union[Path, str],
+        *,
+        max_concurrency: int = DEFAULT_MULTIPART_CONCURRENCY
+    ) -> ScanStatusInfo:
         """
         Run a complete security scan on a model file using the AI Defense service.
 
@@ -123,6 +138,8 @@ class ModelScanClient(ModelScan):
         Args:
             file_path (Union[Path, str]): Path to the model file to be scanned.
                 Can be a string path or pathlib.Path object.
+            max_concurrency (int): Maximum number of file parts uploaded in parallel.
+                Defaults to 10 and must be between 1 and 32.
 
         Returns:
             ScanStatusInfo: Complete scan status information including:
@@ -140,27 +157,27 @@ class ModelScanClient(ModelScan):
             from pathlib import Path
             from aidefense.modelscan import ModelScanClient
             from aidefense.modelscan.models import ScanStatus
-            
+
             client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
-            
+
             try:
                 # Scan a pickle file
                 result = client.scan_file("/path/to/suspicious_model.pkl")
-                
+
                 # Check the results
                 if result.status == ScanStatus.COMPLETED:
                     print("Scan completed successfully")
-                    
+
                     # Check for threats
                     for file_info in result.analysis_results.items:
                         if file_info.threats.items:
                             print(f"⚠️  Threats found in {file_info.name}")
                         else:
                             print(f"✅ {file_info.name} is clean")
-                            
+
                 elif result.status == ScanStatus.FAILED:
                     print("Scan failed")
-                    
+
             except Exception as e:
                 print(f"Scan error: {e}")
             ```
@@ -170,9 +187,16 @@ class ModelScanClient(ModelScan):
 
         res = self.register_scan()
         try:
-            self.upload_file(res.scan_id, file_path)
+            self.upload_file(
+                res.scan_id,
+                file_path,
+                use_multipart_upload=True,
+                max_concurrency=max_concurrency,
+            )
             self.trigger_scan(res.scan_id)
-            scan_info = self.__get_scan_info_wait_until_status(res.scan_id, END_SCAN_STATUS)
+            scan_info = self.__get_scan_info_wait_until_status(
+                res.scan_id, END_SCAN_STATUS
+            )
         except Exception as e:
             if res.scan_id:
                 self.cleanup_scan_data(res.scan_id)
@@ -212,9 +236,9 @@ class ModelScanClient(ModelScan):
             from aidefense.modelscan.models import (
                 ModelRepoConfig, Auth, HuggingFaceAuth, URLType, ScanStatus
             )
-            
+
             client = ModelScanClient(api_key="YOUR_MANAGEMENT_API_KEY")
-            
+
             try:
                 # Configure repository scan
                 repo_config = ModelRepoConfig(
@@ -222,14 +246,14 @@ class ModelScanClient(ModelScan):
                     type=URLType.HUGGING_FACE,
                     auth=Auth(huggingface=HuggingFaceAuth(access_token="hf_token"))
                 )
-                
+
                 # Run the scan
                 result = client.scan_repo(repo_config)
-                
+
                 # Check the results
                 if result.status == ScanStatus.COMPLETED:
                     print("Repository scan completed successfully")
-                    
+
                     # Check for threats
                     for file_info in result.analysis_results.items:
                         if file_info.threats.items:
@@ -239,7 +263,7 @@ class ModelScanClient(ModelScan):
 
                 elif result.status == ScanStatus.FAILED:
                     print("Repository scan failed")
-                    
+
             except Exception as e:
                 print(f"Repository scan error: {e}")
             ```
@@ -251,7 +275,9 @@ class ModelScanClient(ModelScan):
                 raise ValidationError(validation_response.error_message)
 
             self.trigger_scan(res.scan_id)
-            scan_info = self.__get_scan_info_wait_until_status(res.scan_id, END_SCAN_STATUS)
+            scan_info = self.__get_scan_info_wait_until_status(
+                res.scan_id, END_SCAN_STATUS
+            )
         except Exception as e:
             if res.scan_id:
                 self.cleanup_scan_data(res.scan_id)
