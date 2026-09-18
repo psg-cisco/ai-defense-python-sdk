@@ -20,9 +20,13 @@ import pytest
 import requests
 
 from aidefense.config import Config
-from aidefense.exceptions import SDKError
+from aidefense.exceptions import SDKError, ScanTimeoutError
 from aidefense.modelscan.model_scan import ModelScanClient
-from aidefense.modelscan.model_scan_base import ModelScan, _BoundedFileReader
+from aidefense.modelscan.model_scan_base import (
+    ModelScan,
+    _BoundedFileReader,
+    _ConsoleUploadProgress,
+)
 from aidefense.modelscan.models import (
     CreateScanObjectRequest,
     CreateScanObjectResponse,
@@ -132,6 +136,53 @@ def test_upload_file_requests_urls_in_32_part_batches_and_completes(
         f'"etag-{part_number}"' for part_number in range(1, 34)
     ]
     model_scan.abort_multipart_upload.assert_not_called()
+
+
+def test_upload_file_reports_successfully_uploaded_bytes(model_scan, tmp_path):
+    file_path = tmp_path / "model.safetensors"
+    file_path.write_bytes(b"x" * 10)
+    model_scan.create_multipart_scan_object = MagicMock(
+        return_value=multipart_create_response(part_size_bytes=4)
+    )
+    model_scan.get_multipart_upload_part_urls = MagicMock(
+        side_effect=lambda _scan_id, _object_id, request: part_urls(
+            request.part_numbers
+        )
+    )
+    model_scan._upload_multipart_part = MagicMock(
+        side_effect=lambda _path, part_number, *_args, **_kwargs: f'"etag-{part_number}"'
+    )
+    progress_updates = []
+
+    assert (
+        model_scan.upload_file(
+            "scan-id",
+            file_path,
+            show_progress=False,
+            progress_callback=lambda uploaded, total: progress_updates.append(
+                (uploaded, total)
+            ),
+        )
+        is True
+    )
+
+    assert progress_updates[0] == (0, 10)
+    assert progress_updates[-1] == (10, 10)
+    assert [uploaded for uploaded, _ in progress_updates] == sorted(
+        uploaded for uploaded, _ in progress_updates
+    )
+
+
+def test_console_upload_progress_renders_bar(capsys):
+    progress = _ConsoleUploadProgress(width=10)
+
+    progress(5, 10)
+    progress(10, 10)
+
+    output = capsys.readouterr().err
+    assert "50.0%" in output
+    assert "100.0%" in output
+    assert "[##########]" in output
 
 
 def test_upload_file_refreshes_expired_part_url(model_scan, tmp_path):
@@ -290,7 +341,14 @@ def test_scan_file_uses_multipart_upload_and_forwards_concurrency(tmp_path):
         return_value=expected_scan_info
     )
 
-    result = client.scan_file(file_path, max_concurrency=4)
+    progress_callback = MagicMock()
+    result = client.scan_file(
+        file_path,
+        max_concurrency=4,
+        show_progress=False,
+        progress_callback=progress_callback,
+        scan_timeout_seconds=600,
+    )
 
     assert result is expected_scan_info
     client.upload_file.assert_called_once_with(
@@ -298,5 +356,35 @@ def test_scan_file_uses_multipart_upload_and_forwards_concurrency(tmp_path):
         file_path,
         use_multipart_upload=True,
         max_concurrency=4,
+        show_progress=False,
+        progress_callback=progress_callback,
     )
     client.trigger_scan.assert_called_once_with("scan-id")
+    wait_call = client._ModelScanClient__get_scan_info_wait_until_status.call_args
+    assert wait_call.kwargs["timeout_seconds"] == 600
+
+
+def test_scan_timeout_preserves_scan_and_explains_status_retrieval(tmp_path):
+    file_path = tmp_path / "model.pkl"
+    file_path.write_bytes(b"data")
+    client = ModelScanClient(api_key=TEST_API_KEY, request_handler=MagicMock())
+    client.register_scan = MagicMock(return_value=MagicMock(scan_id="scan-id"))
+    client.upload_file = MagicMock(return_value=True)
+    client.trigger_scan = MagicMock()
+    client.get_scan = MagicMock(
+        return_value=MagicMock(scan_status_info=MagicMock(status="IN_PROGRESS"))
+    )
+    client.cleanup_scan_data = MagicMock()
+
+    with patch("aidefense.modelscan.model_scan.monotonic", side_effect=[0.0, 2.0]):
+        with pytest.raises(ScanTimeoutError) as error_info:
+            client.scan_file(
+                file_path,
+                show_progress=False,
+                scan_timeout_seconds=1,
+            )
+
+    assert error_info.value.scan_id == "scan-id"
+    assert error_info.value.timeout_seconds == 1
+    assert 'client.get_scan("scan-id", GetScanStatusRequest())' in str(error_info.value)
+    client.cleanup_scan_data.assert_not_called()

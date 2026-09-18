@@ -16,16 +16,23 @@
 
 import os
 from pathlib import Path
-from time import sleep
-from typing import Collection, Union
+from time import monotonic, sleep
+from typing import Collection, Optional, Union
 
-from aidefense import ValidationError
-from .model_scan_base import DEFAULT_MULTIPART_CONCURRENCY, ModelScan
+from aidefense.exceptions import ScanTimeoutError, ValidationError
+from .model_scan_base import (
+    DEFAULT_MULTIPART_CONCURRENCY,
+    ModelScan,
+    UploadProgressCallback,
+)
 from .models import ScanStatus, ModelRepoConfig, ScanStatusInfo, GetScanStatusRequest
 
 RETRY_COUNT_FOR_SCANNING = int(os.environ.get("AIDEFENSE_MODELSCAN_RETRY_COUNT", "30"))
 WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK = int(
     os.environ.get("AIDEFENSE_MODELSCAN_WAIT_TIME_SECS", "5")
+)
+DEFAULT_SCAN_TIMEOUT_SECONDS = (
+    RETRY_COUNT_FOR_SCANNING * WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK
 )
 END_SCAN_STATUS = [ScanStatus.COMPLETED, ScanStatus.FAILED, ScanStatus.CANCELED]
 
@@ -80,7 +87,10 @@ class ModelScanClient(ModelScan):
     """
 
     def __get_scan_info_wait_until_status(
-        self, scan_id: str, statuses: Collection[ScanStatus]
+        self,
+        scan_id: str,
+        statuses: Collection[ScanStatus],
+        timeout_seconds: float = DEFAULT_SCAN_TIMEOUT_SECONDS,
     ) -> ScanStatusInfo:
         """
         Wait for a scan to reach one of the specified status values.
@@ -91,14 +101,23 @@ class ModelScanClient(ModelScan):
         Args:
             scan_id (str): The unique identifier of the scan to monitor.
             statuses: Acceptable status values to wait for.
+            timeout_seconds: Maximum time to wait for a terminal status.
 
         Returns:
             ScanStatusInfo: The scan status information when the target status is reached.
 
         Raises:
-            Exception: If the scan times out before reaching the target status.
+            ScanTimeoutError: If polling expires. The server-side scan is preserved.
         """
-        for _ in range(RETRY_COUNT_FOR_SCANNING):
+        if (
+            not isinstance(timeout_seconds, (int, float))
+            or isinstance(timeout_seconds, bool)
+            or timeout_seconds <= 0
+        ):
+            raise ValueError("scan_timeout_seconds must be greater than zero")
+
+        deadline = monotonic() + timeout_seconds
+        while True:
             info = self.get_scan(
                 scan_id,
                 GetScanStatusRequest(
@@ -112,9 +131,21 @@ class ModelScanClient(ModelScan):
             if info and info.scan_status_info.status in statuses:
                 return info.scan_status_info
 
-            sleep(WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK)
+            remaining_seconds = deadline - monotonic()
+            if remaining_seconds <= 0:
+                break
+            sleep(min(WAIT_TIME_SECS_SUCCESSIVE_SCAN_INFO_CHECK, remaining_seconds))
 
-        raise Exception("Scan timed out")
+        raise ScanTimeoutError(
+            (
+                f"Scan {scan_id} did not reach a terminal state within "
+                f"{timeout_seconds:g} seconds. The scan was not canceled or deleted. "
+                "Retrieve its current status with "
+                f'client.get_scan("{scan_id}", GetScanStatusRequest()).'
+            ),
+            scan_id=scan_id,
+            timeout_seconds=timeout_seconds,
+        )
 
     def cleanup_scan_data(self, scan_id: str) -> None:
         self.cancel_scan(scan_id)
@@ -125,7 +156,10 @@ class ModelScanClient(ModelScan):
         self,
         file_path: Union[Path, str],
         *,
-        max_concurrency: int = DEFAULT_MULTIPART_CONCURRENCY
+        max_concurrency: int = DEFAULT_MULTIPART_CONCURRENCY,
+        show_progress: bool = True,
+        progress_callback: Optional[UploadProgressCallback] = None,
+        scan_timeout_seconds: float = DEFAULT_SCAN_TIMEOUT_SECONDS,
     ) -> ScanStatusInfo:
         """
         Run a complete security scan on a model file using the AI Defense service.
@@ -140,6 +174,10 @@ class ModelScanClient(ModelScan):
                 Can be a string path or pathlib.Path object.
             max_concurrency (int): Maximum number of file parts uploaded in parallel.
                 Defaults to 10 and must be between 1 and 32.
+            show_progress (bool): Show a console upload progress bar. Defaults to True.
+            progress_callback: Optional callback receiving uploaded and total bytes.
+            scan_timeout_seconds: Maximum time to wait for scan analysis. Defaults to
+                150 seconds. Upload time is not included.
 
         Returns:
             ScanStatusInfo: Complete scan status information including:
@@ -149,8 +187,9 @@ class ModelScanClient(ModelScan):
                 - created_at/completed_at: Timestamps
 
         Raises:
-            Exception: If the scan fails, times out, or encounters any errors during processing.
-                The scan will be automatically canceled and cleaned up before raising the exception.
+            ScanTimeoutError: If scan polling times out. The scan is preserved so its
+                status can be retrieved later with `get_scan()`.
+            Exception: If another error occurs. The scan is automatically cleaned up.
 
         Example:
             ```python
@@ -192,19 +231,30 @@ class ModelScanClient(ModelScan):
                 file_path,
                 use_multipart_upload=True,
                 max_concurrency=max_concurrency,
+                show_progress=show_progress,
+                progress_callback=progress_callback,
             )
             self.trigger_scan(res.scan_id)
             scan_info = self.__get_scan_info_wait_until_status(
-                res.scan_id, END_SCAN_STATUS
+                res.scan_id,
+                END_SCAN_STATUS,
+                timeout_seconds=scan_timeout_seconds,
             )
-        except Exception as e:
+        except ScanTimeoutError:
+            raise
+        except Exception:
             if res.scan_id:
                 self.cleanup_scan_data(res.scan_id)
-            raise e
+            raise
 
         return scan_info
 
-    def scan_repo(self, repo_config: ModelRepoConfig) -> ScanStatusInfo:  # type: ignore
+    def scan_repo(
+        self,
+        repo_config: ModelRepoConfig,
+        *,
+        scan_timeout_seconds: float = DEFAULT_SCAN_TIMEOUT_SECONDS,
+    ) -> ScanStatusInfo:  # type: ignore
         """
         Run a complete security scan on a model repository using the AI Defense service.
 
@@ -216,6 +266,8 @@ class ModelScanClient(ModelScan):
         Args:
             repo_config (ModelRepoConfig): Configuration object containing the repository
                 URL, type, authentication credentials, and other scan parameters.
+            scan_timeout_seconds: Maximum time to wait for scan analysis. Defaults to
+                150 seconds.
 
         Returns:
             ScanStatusInfo: Complete scan status information including:
@@ -225,8 +277,9 @@ class ModelScanClient(ModelScan):
                 - repository: Metadata about the scanned repository
 
         Raises:
-            Exception: If the scan fails, times out, or encounters any errors during processing.
-                The scan will be automatically canceled and cleaned up before raising the exception.
+            ScanTimeoutError: If scan polling times out. The scan is preserved so its
+                status can be retrieved later with `get_scan()`.
+            Exception: If another error occurs. The scan is automatically cleaned up.
             ValidationError: If the repository URL is invalid or inaccessible.
             AuthenticationError: If the provided repository credentials are invalid.
 
@@ -276,11 +329,15 @@ class ModelScanClient(ModelScan):
 
             self.trigger_scan(res.scan_id)
             scan_info = self.__get_scan_info_wait_until_status(
-                res.scan_id, END_SCAN_STATUS
+                res.scan_id,
+                END_SCAN_STATUS,
+                timeout_seconds=scan_timeout_seconds,
             )
-        except Exception as e:
+        except ScanTimeoutError:
+            raise
+        except Exception:
             if res.scan_id:
                 self.cleanup_scan_data(res.scan_id)
-            raise e
+            raise
 
         return scan_info

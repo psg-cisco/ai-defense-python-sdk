@@ -51,8 +51,10 @@ elif result.status == ScanStatus.FAILED:
 ```
 
 `scan_file()` uses multipart upload by default. The service selects the part size, the SDK requests
-presigned URLs in batches of at most 32, and up to 10 parts are uploaded concurrently. Concurrency can
-be reduced for constrained systems without changing the multipart contract:
+presigned URLs in batches of at most 32, and up to 10 parts are uploaded concurrently. A console
+progress bar is shown by default and can be disabled with `show_progress=False`. Applications can use
+`progress_callback` to receive `(uploaded_bytes, total_bytes)` updates instead. Concurrency can be
+reduced for constrained systems without changing the multipart contract:
 
 ```python
 result = client.scan_file("/path/to/large-model.safetensors", max_concurrency=4)
@@ -61,6 +63,28 @@ result = client.scan_file("/path/to/large-model.safetensors", max_concurrency=4)
 Each worker streams only its assigned file range, so the SDK does not load the entire model—or one full
 part per worker—into memory. If any part fails after its retry budget is exhausted, the SDK aborts the
 multipart upload before propagating the error.
+
+After upload, `scan_file()` waits up to 150 seconds by default for analysis to reach a terminal state.
+This polling timeout can be changed with `scan_timeout_seconds`. If it expires, the SDK raises
+`ScanTimeoutError` without canceling or deleting the scan. The exception includes `scan_id`, which can
+be passed to `get_scan()` to retrieve the result later.
+
+The SDK's separate per-request network timeout defaults to 30 seconds and can be configured with
+`Config(timeout=...)`. It applies to individual API and upload requests; it is not an overall multipart
+upload deadline.
+
+```python
+from aidefense import ScanTimeoutError
+from aidefense.modelscan.models import GetScanStatusRequest
+
+try:
+    result = client.scan_file(
+        "/path/to/large-model.safetensors",
+        scan_timeout_seconds=600,
+    )
+except ScanTimeoutError as error:
+    result = client.get_scan(error.scan_id, GetScanStatusRequest())
+```
 
 ### Repository Scanning with ModelScanClient
 

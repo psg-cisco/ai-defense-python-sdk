@@ -16,9 +16,10 @@
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+import sys
 from threading import Lock, local
 from time import sleep
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
 import requests
@@ -67,6 +68,30 @@ MAX_MULTIPART_CONCURRENCY = 32
 MAX_PART_UPLOAD_ATTEMPTS = 3
 PART_UPLOAD_RETRY_BACKOFF_SECONDS = 0.5
 PRESIGNED_URL_EXPIRATION_CODES = ("ExpiredToken", "RequestExpired")
+UploadProgressCallback = Callable[[int, int], None]
+
+
+class _ConsoleUploadProgress:
+    """Render a dependency-free progress bar for interactive SDK callers."""
+
+    def __init__(self, width: int = 30):
+        self._width = width
+        self._lock = Lock()
+
+    def __call__(self, uploaded_bytes: int, total_bytes: int) -> None:
+        ratio = min(1.0, uploaded_bytes / total_bytes) if total_bytes else 1.0
+        filled = int(self._width * ratio)
+        bar = "#" * filled + "-" * (self._width - filled)
+        uploaded_mb = uploaded_bytes / MB
+        total_mb = total_bytes / MB
+        with self._lock:
+            print(
+                f"\rUploading [{bar}] {ratio:6.1%} "
+                f"({uploaded_mb:.1f}/{total_mb:.1f} MiB)",
+                end="\n" if uploaded_bytes >= total_bytes else "",
+                file=sys.stderr,
+                flush=True,
+            )
 
 
 class _BoundedFileReader:
@@ -416,7 +441,11 @@ class ModelScan(BaseClient):
         return etag
 
     def _upload_file_multipart(
-        self, scan_id: str, file_path: Path, max_concurrency: int
+        self,
+        scan_id: str,
+        file_path: Path,
+        max_concurrency: int,
+        progress_callback: Optional[UploadProgressCallback],
     ) -> bool:
         if not isinstance(max_concurrency, int) or isinstance(max_concurrency, bool):
             raise ValueError("max_concurrency must be an integer")
@@ -513,6 +542,9 @@ class ModelScan(BaseClient):
             raise SDKError(f"Multipart upload part {part_number} failed")
 
         completed_parts = []
+        uploaded_bytes = 0
+        if progress_callback:
+            progress_callback(uploaded_bytes, file_size)
         try:
             part_numbers = list(range(1, part_count + 1))
             try:
@@ -547,7 +579,14 @@ class ModelScan(BaseClient):
                             for number in batch_part_numbers
                         }
                         for future in as_completed(futures):
+                            part_number = futures[future]
                             completed_parts.append(future.result())
+                            uploaded_bytes += min(
+                                part_size_bytes,
+                                file_size - (part_number - 1) * part_size_bytes,
+                            )
+                            if progress_callback:
+                                progress_callback(uploaded_bytes, file_size)
             finally:
                 for worker_session in worker_sessions:
                     worker_session.close()
@@ -582,6 +621,8 @@ class ModelScan(BaseClient):
         *,
         use_multipart_upload: bool = True,
         max_concurrency: int = DEFAULT_MULTIPART_CONCURRENCY,
+        show_progress: bool = True,
+        progress_callback: Optional[UploadProgressCallback] = None,
     ) -> bool:
         """
         Upload a file to be scanned within an existing scan session.
@@ -592,6 +633,8 @@ class ModelScan(BaseClient):
         Args:
             scan_id (str): The unique identifier of the scan session.
             file_path (Path): Path to the file to be uploaded and scanned.
+            show_progress (bool): Show a console upload progress bar. Defaults to True.
+            progress_callback: Optional callback receiving uploaded and total bytes.
 
         Returns:
             bool: True if the file was successfully uploaded, False otherwise.
@@ -613,8 +656,21 @@ class ModelScan(BaseClient):
         file_path = Path(file_path)
         self._validate_file_for_upload(file_path)
 
+        console_progress = _ConsoleUploadProgress() if show_progress else None
+
+        def report_progress(uploaded_bytes: int, total_bytes: int) -> None:
+            if console_progress:
+                console_progress(uploaded_bytes, total_bytes)
+            if progress_callback:
+                progress_callback(uploaded_bytes, total_bytes)
+
         if use_multipart_upload:
-            return self._upload_file_multipart(scan_id, file_path, max_concurrency)
+            return self._upload_file_multipart(
+                scan_id,
+                file_path,
+                max_concurrency,
+                report_progress if console_progress or progress_callback else None,
+            )
 
         req = CreateScanObjectRequest(
             file_name=file_path.name,
@@ -622,9 +678,11 @@ class ModelScan(BaseClient):
         )
         _, upload_url = self.create_scan_object(scan_id, req)
 
+        report_progress(0, file_path.stat().st_size)
         with open(file_path, "rb") as f:
             result = requests.request(method=HttpMethod.PUT, url=upload_url, data=f)
         result.raise_for_status()
+        report_progress(file_path.stat().st_size, file_path.stat().st_size)
         return True
 
     def trigger_scan(self, scan_id: str) -> None:
